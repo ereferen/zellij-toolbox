@@ -61,8 +61,8 @@ impl ZellijPlugin for ToolboxPlugin {
         // Initial content (use marker for dynamic separator)
         self.content = vec!["---".to_string(), " Loading...".to_string(), "---".to_string()];
 
-        // Start periodic refresh
-        set_timeout(self.refresh_interval);
+        // Trigger first refresh immediately (short timer to avoid I/O error in load)
+        set_timeout(0.1);
     }
 
     fn update(&mut self, event: Event) -> bool {
@@ -102,10 +102,10 @@ impl ZellijPlugin for ToolboxPlugin {
         self.cols = cols;
 
         if self.single_line {
-            // Single line mode: join all non-separator lines
+            // Single line mode: join all non-separator lines (no trailing newline)
             let line = self.build_single_line();
             let display_line: String = line.chars().take(cols).collect();
-            println!("{}", display_line);
+            print!("{}", display_line);
         } else {
             // Multi-line mode
             for (i, line) in self.content.iter().enumerate() {
