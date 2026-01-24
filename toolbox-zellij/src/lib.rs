@@ -17,6 +17,8 @@ struct ToolboxPlugin {
     rows: usize,
     /// Refresh interval in seconds
     refresh_interval: f64,
+    /// Working directory for tool detection
+    working_dir: Option<String>,
 }
 
 register_plugin!(ToolboxPlugin);
@@ -43,6 +45,9 @@ impl ZellijPlugin for ToolboxPlugin {
             .get("refresh_interval")
             .and_then(|s| s.parse::<f64>().ok())
             .unwrap_or(5.0);
+
+        // Read working directory from configuration
+        self.working_dir = configuration.get("working_dir").cloned();
 
         // Initial content
         self.content = vec![
@@ -113,10 +118,17 @@ impl ToolboxPlugin {
     fn request_tool_versions(&self) {
         // Run the toolbox CLI to get versions
         // The CLI should be installed and in PATH
-        run_command(
-            &["toolbox", "--format", "text", "--compact"],
-            BTreeMap::new(),
-        );
+        let mut args = vec!["toolbox", "--format", "text", "--compact"];
+
+        // Add working directory if configured
+        let dir_arg;
+        if let Some(ref dir) = self.working_dir {
+            args.push("--dir");
+            dir_arg = dir.clone();
+            args.push(&dir_arg);
+        }
+
+        run_command(&args, BTreeMap::new());
     }
 
     fn parse_output(&mut self, stdout: &[u8]) {

@@ -74,7 +74,8 @@ Create a layout file to use the plugin:
 layout {
     pane size=1 borderless=true {
         plugin location="file:~/.config/zellij/plugins/toolbox_zellij.wasm" {
-            refresh_interval "5"  // Refresh every 5 seconds
+            refresh_interval "5"         // Refresh every 5 seconds
+            working_dir "/path/to/project"  // Optional: for asdf/mise support
         }
     }
     pane
