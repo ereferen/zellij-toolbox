@@ -5,6 +5,7 @@
 //! The plugin will need to communicate with the CLI tool for updates.
 
 use std::collections::BTreeMap;
+use unicode_width::UnicodeWidthChar;
 use zellij_tile::prelude::*;
 
 #[derive(Default)]
@@ -112,7 +113,7 @@ impl ZellijPlugin for ToolboxPlugin {
         if self.single_line {
             // Single line mode: join all non-separator lines (no trailing newline)
             let line = self.build_single_line();
-            let display_line: String = line.chars().take(cols).collect();
+            let display_line = truncate_to_width(&line, cols);
             print!("{}", display_line);
         } else {
             // Multi-line mode
@@ -124,7 +125,7 @@ impl ZellijPlugin for ToolboxPlugin {
                 let display_line = if line.starts_with('─') || line == "---" {
                     "─".repeat(cols)
                 } else {
-                    line.chars().take(cols).collect()
+                    truncate_to_width(line, cols)
                 };
                 println!("{}", display_line);
             }
@@ -182,4 +183,22 @@ impl ToolboxPlugin {
             .collect();
         parts.join(" | ")
     }
+}
+
+/// Truncate a string to fit within a given display width
+/// Accounts for Unicode character widths (e.g., emojis are width 2)
+fn truncate_to_width(s: &str, max_width: usize) -> String {
+    let mut result = String::new();
+    let mut current_width = 0;
+
+    for c in s.chars() {
+        let char_width = UnicodeWidthChar::width(c).unwrap_or(0);
+        if current_width + char_width > max_width {
+            break;
+        }
+        result.push(c);
+        current_width += char_width;
+    }
+
+    result
 }
