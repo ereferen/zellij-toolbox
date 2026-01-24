@@ -11,7 +11,7 @@ name = "toolbox"
 path = "src/main.rs"
 
 [dependencies]
-toolbox-core = { workspace = true }
+toolbox-core = { workspace = true, features = ["git", "sysinfo"] }
 clap = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }

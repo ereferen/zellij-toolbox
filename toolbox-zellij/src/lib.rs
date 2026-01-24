@@ -15,12 +15,14 @@ struct ToolboxPlugin {
     cols: usize,
     /// Plugin height
     rows: usize,
+    /// Refresh interval in seconds
+    refresh_interval: f64,
 }
 
 register_plugin!(ToolboxPlugin);
 
 impl ZellijPlugin for ToolboxPlugin {
-    fn load(&mut self, _configuration: BTreeMap<String, String>) {
+    fn load(&mut self, configuration: BTreeMap<String, String>) {
         // Request permissions
         request_permission(&[
             PermissionType::RunCommands,
@@ -33,7 +35,14 @@ impl ZellijPlugin for ToolboxPlugin {
             EventType::TabUpdate,
             EventType::PaneUpdate,
             EventType::RunCommandResult,
+            EventType::Timer,
         ]);
+
+        // Read refresh interval from configuration (default: 5 seconds)
+        self.refresh_interval = configuration
+            .get("refresh_interval")
+            .and_then(|s| s.parse::<f64>().ok())
+            .unwrap_or(5.0);
 
         // Initial content
         self.content = vec![
@@ -44,6 +53,9 @@ impl ZellijPlugin for ToolboxPlugin {
 
         // Request tool versions
         self.request_tool_versions();
+
+        // Start periodic refresh
+        set_timeout(self.refresh_interval);
     }
 
     fn update(&mut self, event: Event) -> bool {
@@ -60,6 +72,13 @@ impl ZellijPlugin for ToolboxPlugin {
                     ];
                 }
                 true
+            }
+            Event::Timer(_elapsed) => {
+                // Periodic refresh
+                self.request_tool_versions();
+                // Schedule next refresh
+                set_timeout(self.refresh_interval);
+                false
             }
             Event::PaneUpdate(pane_manifest) => {
                 // Could track active pane's working directory here
