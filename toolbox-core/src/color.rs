@@ -158,6 +158,42 @@ pub fn render_powerline(segments: &[Segment], use_color: bool) -> String {
     result
 }
 
+
+/// Render segments as multiline powerline (each segment on its own line)
+pub fn render_powerline_multiline(segments: &[Segment], use_color: bool) -> String {
+    if !use_color || segments.is_empty() {
+        // Plain text fallback
+        return segments
+            .iter()
+            .map(|s| format!(" {}", s.text))
+            .collect::<Vec<_>>()
+            .join("\n");
+    }
+
+    let mut lines = Vec::new();
+
+    for segment in segments {
+        let mut line = String::new();
+        
+        // Background and foreground for this segment
+        line.push_str(segment.bg);
+        line.push_str(segment.fg);
+        line.push(' ');
+        line.push_str(&segment.text);
+        line.push(' ');
+        
+        // End of line separator
+        line.push_str(ansi::RESET);
+        line.push_str(segment.bg_color_fg);
+        line.push(SEPARATOR_RIGHT);
+        line.push_str(ansi::RESET);
+        
+        lines.push(line);
+    }
+
+    lines.join("\n")
+}
+
 /// Check if stdout is a terminal that supports colors
 pub fn should_use_color(mode: ColorMode) -> bool {
     match mode {

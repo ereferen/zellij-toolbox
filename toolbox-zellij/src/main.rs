@@ -22,6 +22,8 @@ struct ToolboxPlugin {
     working_dir: Option<String>,
     /// Single line display mode
     single_line: bool,
+    /// Powerline style output
+    powerline: bool,
 }
 
 register_plugin!(ToolboxPlugin);
@@ -55,6 +57,12 @@ impl ZellijPlugin for ToolboxPlugin {
         // Read single line mode from configuration (default: false)
         self.single_line = configuration
             .get("single_line")
+            .map(|s| s == "true" || s == "1")
+            .unwrap_or(false);
+
+        // Read powerline mode from configuration (default: false)
+        self.powerline = configuration
+            .get("powerline")
             .map(|s| s == "true" || s == "1")
             .unwrap_or(false);
 
@@ -129,6 +137,18 @@ impl ToolboxPlugin {
         // Run the toolbox CLI to get versions
         // The CLI should be installed and in PATH
         let mut args = vec!["toolbox", "--format", "text", "--compact"];
+
+        // Add powerline flag if enabled
+        if self.powerline {
+            args.push("--powerline");
+            args.push("--color");
+            args.push("always");
+            
+            // Add single line flag if enabled
+            if self.single_line {
+                args.push("--single-line");
+            }
+        }
 
         // Add working directory if configured
         let dir_arg;

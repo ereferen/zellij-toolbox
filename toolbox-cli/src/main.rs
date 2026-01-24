@@ -34,6 +34,10 @@ struct Cli {
     #[arg(long)]
     powerline: bool,
 
+    /// Single line output (only with --powerline)
+    #[arg(long)]
+    single_line: bool,
+
     /// Color mode: auto, always, never
     #[arg(long, default_value = "auto")]
     color: String,
@@ -101,7 +105,7 @@ fn main() -> Result<()> {
             let show_icons = !cli.no_icons && detector.config().display.show_icons;
 
             if cli.powerline {
-                println!("{}", info.format_powerline(compact, show_icons, use_color));
+                println!("{}", info.format_powerline(compact, show_icons, use_color, cli.single_line));
             } else {
                 println!("{}", info.format_display(compact, show_icons));
             }

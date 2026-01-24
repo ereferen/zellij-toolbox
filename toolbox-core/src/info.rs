@@ -282,8 +282,10 @@ impl ToolboxInfo {
 
 
     /// Format for display as a powerline-style colored output
-    pub fn format_powerline(&self, compact: bool, show_icons: bool, use_color: bool) -> String {
-        use crate::color::{render_powerline, Segment};
+    /// If single_line is true, all segments are joined in one line
+    /// If false, each segment is on its own line with colored background
+    pub fn format_powerline(&self, compact: bool, show_icons: bool, use_color: bool, single_line: bool) -> String {
+        use crate::color::{render_powerline, render_powerline_multiline, Segment};
 
         let mut segments = Vec::new();
 
@@ -369,7 +371,11 @@ impl ToolboxInfo {
             segments.push(Segment::green(text));
         }
 
-        render_powerline(&segments, use_color)
+        if single_line {
+            render_powerline(&segments, use_color)
+        } else {
+            render_powerline_multiline(&segments, use_color)
+        }
     }
 }
 
