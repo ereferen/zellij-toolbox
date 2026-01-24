@@ -7,6 +7,7 @@
 //! - Git repository information
 //! - System resource information
 
+pub mod color;
 pub mod config;
 pub mod detector;
 pub mod error;

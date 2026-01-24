@@ -30,6 +30,14 @@ struct Cli {
     #[arg(long)]
     no_icons: bool,
 
+    /// Powerline style output (colored segments with separators)
+    #[arg(long)]
+    powerline: bool,
+
+    /// Color mode: auto, always, never
+    #[arg(long, default_value = "auto")]
+    color: String,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -79,12 +87,24 @@ fn main() -> Result<()> {
     // Detect all tools
     let info = detector.detect_all();
 
+    // Parse color mode
+    let color_mode: toolbox_core::color::ColorMode = cli
+        .color
+        .parse()
+        .unwrap_or(toolbox_core::color::ColorMode::Auto);
+    let use_color = toolbox_core::color::should_use_color(color_mode);
+
     // Output
     match cli.format {
         OutputFormat::Text => {
             let compact = cli.compact || detector.config().display.compact;
             let show_icons = !cli.no_icons && detector.config().display.show_icons;
-            println!("{}", info.format_display(compact, show_icons));
+
+            if cli.powerline {
+                println!("{}", info.format_powerline(compact, show_icons, use_color));
+            } else {
+                println!("{}", info.format_display(compact, show_icons));
+            }
         }
         OutputFormat::Json => {
             println!("{}", serde_json::to_string(&info)?);

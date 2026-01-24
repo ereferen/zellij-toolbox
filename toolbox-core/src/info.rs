@@ -279,6 +279,98 @@ impl ToolboxInfo {
 
         lines.join("\n")
     }
+
+
+    /// Format for display as a powerline-style colored output
+    pub fn format_powerline(&self, compact: bool, show_icons: bool, use_color: bool) -> String {
+        use crate::color::{render_powerline, Segment};
+
+        let mut segments = Vec::new();
+
+        // Current directory
+        if let Some(ref dir) = self.current_dir {
+            let display_dir = if compact {
+                shorten_path(dir)
+            } else {
+                dir.clone()
+            };
+            let text = if show_icons {
+                format!("📂 {}", display_dir)
+            } else {
+                display_dir
+            };
+            segments.push(Segment::blue(text));
+        }
+
+        // Git info
+        if let Some(ref git) = self.git {
+            let mut text = if show_icons {
+                format!(" {}", git.branch)
+            } else {
+                git.branch.clone()
+            };
+
+            let mut suffixes = Vec::new();
+            if let Some(summary) = git.changes_summary() {
+                suffixes.push(summary);
+            }
+            if let Some(ab_summary) = git.ahead_behind_summary() {
+                suffixes.push(ab_summary);
+            }
+
+            if !suffixes.is_empty() {
+                text = format!("{} {}", text, suffixes.join(" "));
+            }
+
+            // Use green for clean, yellow for dirty
+            if git.is_dirty {
+                segments.push(Segment::yellow(text));
+            } else {
+                segments.push(Segment::green(text));
+            }
+        }
+
+        // Tools - group them or show individually
+        let available_tools: Vec<_> = self.tools.iter().filter(|t| t.available).collect();
+        
+        // Define colors to cycle through for tools
+        let tool_colors = [
+            Segment::cyan,
+            Segment::magenta,
+            Segment::gray,
+        ];
+
+        for (i, tool) in available_tools.iter().enumerate() {
+            let name = if compact {
+                tool.short_name.as_ref().unwrap_or(&tool.name)
+            } else {
+                &tool.name
+            };
+            let version = tool.version.as_deref().unwrap_or("?");
+
+            let text = if show_icons {
+                let icon = tool.icon.as_deref().unwrap_or("");
+                format!("{} {} {}", icon, name, version)
+            } else {
+                format!("{} {}", name, version)
+            };
+
+            let color_fn = tool_colors[i % tool_colors.len()];
+            segments.push(color_fn(text));
+        }
+
+        // Virtual env
+        if let Some(ref venv) = self.virtual_env {
+            let text = if show_icons {
+                format!("🐍 {}", venv)
+            } else {
+                format!("venv: {}", venv)
+            };
+            segments.push(Segment::green(text));
+        }
+
+        render_powerline(&segments, use_color)
+    }
 }
 
 impl Default for ToolboxInfo {
