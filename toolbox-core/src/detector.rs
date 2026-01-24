@@ -234,20 +234,16 @@ impl ToolDetector {
         repo: &git2::Repository,
         head: &git2::Reference,
     ) -> Option<(Option<usize>, Option<usize>)> {
-        // Get the upstream branch
+        // Get the local OID
         let local_oid = head.target()?;
+
+        // Get the branch name and create a Branch object
         let branch_name = head.shorthand()?;
+        let branch = repo.find_branch(branch_name, git2::BranchType::Local).ok()?;
 
-        // Get upstream reference name
-        let upstream_name = repo
-            .branch_upstream_name(branch_name)
-            .ok()?
-            .as_str()?
-            .to_string();
-
-        // Find the upstream reference
-        let upstream_ref = repo.find_reference(&upstream_name).ok()?;
-        let upstream_oid = upstream_ref.target()?;
+        // Get the upstream branch
+        let upstream = branch.upstream().ok()?;
+        let upstream_oid = upstream.get().target()?;
 
         // Calculate ahead/behind
         let (ahead, behind) = repo.graph_ahead_behind(local_oid, upstream_oid).ok()?;
