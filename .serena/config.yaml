@@ -1,0 +1,16 @@
+# Serena configuration for zellij-toolbox project
+project_type: rust
+language_servers:
+  - rust-analyzer
+
+# Files/directories to ignore during analysis
+ignore_patterns:
+  - target/
+  - "*.lock"
+  - .git/
+
+# Important directories for this project
+important_paths:
+  - toolbox-core/src/
+  - toolbox-cli/src/
+  - toolbox-zellij/src/

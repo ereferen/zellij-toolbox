@@ -1,0 +1,46 @@
+[workspace]
+resolver = "2"
+members = [
+    "toolbox-core",
+    "toolbox-cli",
+    "toolbox-zellij",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["tenki"]
+license = "MIT"
+repository = "https://github.com/tenki/zellij-plugins"
+
+[workspace.dependencies]
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# CLI
+clap = { version = "4.4", features = ["derive"] }
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Regex for parsing
+regex = "1.10"
+
+# Directory and path handling
+dirs = "5.0"
+
+# Git operations
+git2 = "0.18"
+
+# System info
+sysinfo = "0.30"
+
+# Internal crates
+toolbox-core = { path = "toolbox-core", default-features = true }
+
+[profile.release]
+opt-level = "s"
+lto = true

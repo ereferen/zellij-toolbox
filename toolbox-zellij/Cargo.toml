@@ -1,0 +1,16 @@
+[package]
+name = "toolbox-zellij"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Zellij plugin for displaying development tool versions"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+toolbox-core = { workspace = true, default-features = false, features = ["wasm"] }
+zellij-tile = "0.40"
+serde = { workspace = true }
+serde_json = { workspace = true }
