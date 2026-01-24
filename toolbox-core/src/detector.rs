@@ -198,6 +198,13 @@ impl ToolDetector {
 
         let is_dirty = modified_count > 0 || staged_count > 0 || untracked_count > 0;
 
+        // Get ahead/behind counts
+        let (ahead, behind) = if head.is_branch() {
+            Self::get_ahead_behind(&repo, &head).unwrap_or((None, None))
+        } else {
+            (None, None)
+        };
+
         Some(GitInfo {
             branch,
             modified_count: if self.config.extras.git_status {
@@ -216,9 +223,39 @@ impl ToolDetector {
                 None
             },
             is_dirty,
-            ahead: None,  // TODO: implement
-            behind: None, // TODO: implement
+            ahead,
+            behind,
         })
+    }
+
+    /// Get ahead/behind counts relative to upstream
+    #[cfg(feature = "git")]
+    fn get_ahead_behind(
+        repo: &git2::Repository,
+        head: &git2::Reference,
+    ) -> Option<(Option<usize>, Option<usize>)> {
+        // Get the upstream branch
+        let local_oid = head.target()?;
+        let branch_name = head.shorthand()?;
+
+        // Get upstream reference name
+        let upstream_name = repo
+            .branch_upstream_name(branch_name)
+            .ok()?
+            .as_str()?
+            .to_string();
+
+        // Find the upstream reference
+        let upstream_ref = repo.find_reference(&upstream_name).ok()?;
+        let upstream_oid = upstream_ref.target()?;
+
+        // Calculate ahead/behind
+        let (ahead, behind) = repo.graph_ahead_behind(local_oid, upstream_oid).ok()?;
+
+        Some((
+            if ahead > 0 { Some(ahead) } else { None },
+            if behind > 0 { Some(behind) } else { None },
+        ))
     }
 
     #[cfg(not(feature = "git"))]

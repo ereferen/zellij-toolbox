@@ -125,6 +125,25 @@ impl GitInfo {
             None
         }
     }
+
+    /// Get ahead/behind summary like "↑2 ↓1"
+    pub fn ahead_behind_summary(&self) -> Option<String> {
+        let mut parts = Vec::new();
+
+        if let Some(ahead) = self.ahead {
+            parts.push(format!("↑{}", ahead));
+        }
+
+        if let Some(behind) = self.behind {
+            parts.push(format!("↓{}", behind));
+        }
+
+        if !parts.is_empty() {
+            Some(parts.join(" "))
+        } else {
+            None
+        }
+    }
 }
 
 /// System resource information
@@ -184,8 +203,16 @@ impl ToolboxInfo {
                 format!(" {}", git.branch)
             };
 
+            let mut suffixes = Vec::new();
             if let Some(summary) = git.changes_summary() {
-                lines.push(format!("{} ({})", branch_display, summary));
+                suffixes.push(summary);
+            }
+            if let Some(ab_summary) = git.ahead_behind_summary() {
+                suffixes.push(ab_summary);
+            }
+
+            if !suffixes.is_empty() {
+                lines.push(format!("{} ({})", branch_display, suffixes.join(" ")));
             } else {
                 lines.push(branch_display);
             }
