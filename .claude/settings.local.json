@@ -18,7 +18,11 @@
       "WebFetch(domain:docs.rs)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:zellij.dev)",
-      "Bash(zellij --version)"
+      "Bash(zellij --version)",
+      "Bash(wasm-objdump:*)",
+      "Bash(wasm2wat:*)",
+      "Bash(wasm-tools print:*)",
+      "WebSearch"
     ]
   }
 }

@@ -50,14 +50,10 @@ impl ZellijPlugin for ToolboxPlugin {
         self.working_dir = configuration.get("working_dir").cloned();
 
         // Initial content
-        self.content = vec![
-            "─".repeat(15),
-            " Loading...".to_string(),
-            "─".repeat(15),
-        ];
+        self.content = vec!["─".repeat(15), " Loading...".to_string(), "─".repeat(15)];
 
         // Request tool versions
-        self.request_tool_versions();
+        // self.request_tool_versions();
 
         // Start periodic refresh
         set_timeout(self.refresh_interval);

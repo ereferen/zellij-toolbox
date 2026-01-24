@@ -6,11 +6,10 @@ authors.workspace = true
 license.workspace = true
 description = "Zellij plugin for displaying development tool versions"
 
-[lib]
-crate-type = ["cdylib"]
-
 [dependencies]
-toolbox-core = { workspace = true, default-features = false, features = ["wasm"] }
-zellij-tile = "0.40"
+toolbox-core = { workspace = true, default-features = false, features = [
+    "wasm",
+] }
+zellij-tile = "0.43.1"
 serde = { workspace = true }
 serde_json = { workspace = true }
