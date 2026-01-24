@@ -40,12 +40,17 @@ toolbox
 
 # Output example:
 #  📂 ~/project
-#  🌿 main (+3)
+#  🌿 main (+3 ↑2)
 # ───────────────
 #  🐍 py 3.12.1
 #  📦 node 20.11
 #  🦀 rust 1.75
 #  🔷 go 1.21
+#
+# Git status format:
+#  +N  = N local changes (modified/staged/untracked)
+#  ↑N  = N commits ahead of remote
+#  ↓N  = N commits behind remote
 
 # JSON output
 toolbox --format json
@@ -59,6 +64,34 @@ toolbox init
 # List available tools
 toolbox list-tools
 ```
+
+### Zellij Plugin
+
+Create a layout file to use the plugin:
+
+```kdl
+// ~/.config/zellij/layouts/toolbox.kdl
+layout {
+    pane size=1 borderless=true {
+        plugin location="file:~/.config/zellij/plugins/toolbox_zellij.wasm" {
+            refresh_interval "5"  // Refresh every 5 seconds
+        }
+    }
+    pane
+}
+```
+
+Launch Zellij with the layout:
+
+```bash
+zellij --layout toolbox
+```
+
+The plugin will:
+- Display tool versions at the top of your terminal
+- Auto-refresh every N seconds (configurable)
+- Show Git branch and status
+- Detect directory-specific versions (when CWD support is added)
 
 ### Configuration
 
