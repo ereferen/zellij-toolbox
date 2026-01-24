@@ -306,3 +306,291 @@ fn shorten_path(path: &str) -> String {
         path.to_string()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ToolInfo tests
+    #[test]
+    fn test_tool_info_available() {
+        let info = ToolInfo::available("Rust".to_string(), "1.75.0".to_string());
+        assert_eq!(info.name, "Rust");
+        assert_eq!(info.version, Some("1.75.0".to_string()));
+        assert!(info.available);
+        assert!(info.error.is_none());
+        assert!(info.icon.is_none());
+        assert!(info.short_name.is_none());
+    }
+
+    #[test]
+    fn test_tool_info_unavailable() {
+        let info = ToolInfo::unavailable("Ruby".to_string(), Some("not found".to_string()));
+        assert_eq!(info.name, "Ruby");
+        assert!(info.version.is_none());
+        assert!(!info.available);
+        assert_eq!(info.error, Some("not found".to_string()));
+    }
+
+    #[test]
+    fn test_tool_info_with_icon() {
+        let info = ToolInfo::available("Rust".to_string(), "1.75.0".to_string())
+            .with_icon(Some("🦀".to_string()));
+        assert_eq!(info.icon, Some("🦀".to_string()));
+    }
+
+    #[test]
+    fn test_tool_info_with_short_name() {
+        let info = ToolInfo::available("Python".to_string(), "3.11.0".to_string())
+            .with_short_name(Some("py".to_string()));
+        assert_eq!(info.short_name, Some("py".to_string()));
+    }
+
+    #[test]
+    fn test_tool_info_chained_builders() {
+        let info = ToolInfo::available("Node".to_string(), "20.0.0".to_string())
+            .with_icon(Some("📦".to_string()))
+            .with_short_name(Some("node".to_string()));
+        assert_eq!(info.icon, Some("📦".to_string()));
+        assert_eq!(info.short_name, Some("node".to_string()));
+    }
+
+    // GitInfo tests
+    #[test]
+    fn test_git_info_changes_summary_with_changes() {
+        let git = GitInfo {
+            branch: "main".to_string(),
+            modified_count: Some(2),
+            staged_count: Some(1),
+            untracked_count: Some(3),
+            is_dirty: true,
+            ahead: None,
+            behind: None,
+        };
+        assert_eq!(git.changes_summary(), Some("+6".to_string()));
+    }
+
+    #[test]
+    fn test_git_info_changes_summary_no_changes() {
+        let git = GitInfo {
+            branch: "main".to_string(),
+            modified_count: Some(0),
+            staged_count: Some(0),
+            untracked_count: Some(0),
+            is_dirty: false,
+            ahead: None,
+            behind: None,
+        };
+        assert!(git.changes_summary().is_none());
+    }
+
+    #[test]
+    fn test_git_info_changes_summary_none_counts() {
+        let git = GitInfo {
+            branch: "main".to_string(),
+            modified_count: None,
+            staged_count: None,
+            untracked_count: None,
+            is_dirty: false,
+            ahead: None,
+            behind: None,
+        };
+        assert!(git.changes_summary().is_none());
+    }
+
+    #[test]
+    fn test_git_info_ahead_behind_summary_ahead_only() {
+        let git = GitInfo {
+            branch: "feature".to_string(),
+            modified_count: None,
+            staged_count: None,
+            untracked_count: None,
+            is_dirty: false,
+            ahead: Some(3),
+            behind: None,
+        };
+        assert_eq!(git.ahead_behind_summary(), Some("↑3".to_string()));
+    }
+
+    #[test]
+    fn test_git_info_ahead_behind_summary_behind_only() {
+        let git = GitInfo {
+            branch: "feature".to_string(),
+            modified_count: None,
+            staged_count: None,
+            untracked_count: None,
+            is_dirty: false,
+            ahead: None,
+            behind: Some(2),
+        };
+        assert_eq!(git.ahead_behind_summary(), Some("↓2".to_string()));
+    }
+
+    #[test]
+    fn test_git_info_ahead_behind_summary_both() {
+        let git = GitInfo {
+            branch: "feature".to_string(),
+            modified_count: None,
+            staged_count: None,
+            untracked_count: None,
+            is_dirty: false,
+            ahead: Some(5),
+            behind: Some(3),
+        };
+        assert_eq!(git.ahead_behind_summary(), Some("↑5 ↓3".to_string()));
+    }
+
+    #[test]
+    fn test_git_info_ahead_behind_summary_none() {
+        let git = GitInfo {
+            branch: "main".to_string(),
+            modified_count: None,
+            staged_count: None,
+            untracked_count: None,
+            is_dirty: false,
+            ahead: None,
+            behind: None,
+        };
+        assert!(git.ahead_behind_summary().is_none());
+    }
+
+    // ToolboxInfo tests
+    #[test]
+    fn test_toolbox_info_new() {
+        let info = ToolboxInfo::new();
+        assert!(info.current_dir.is_none());
+        assert!(info.git.is_none());
+        assert!(info.tools.is_empty());
+        assert!(info.system.is_none());
+        assert!(info.virtual_env.is_none());
+        assert!(info.shell.is_none());
+    }
+
+    #[test]
+    fn test_toolbox_info_default() {
+        let info = ToolboxInfo::default();
+        assert!(info.tools.is_empty());
+    }
+
+    #[test]
+    fn test_toolbox_info_format_display_empty() {
+        let info = ToolboxInfo::new();
+        let output = info.format_display(true, true);
+        assert!(output.is_empty());
+    }
+
+    #[test]
+    fn test_toolbox_info_format_display_with_tools() {
+        let mut info = ToolboxInfo::new();
+        info.tools.push(ToolInfo::available("Rust".to_string(), "1.75.0".to_string())
+            .with_icon(Some("🦀".to_string()))
+            .with_short_name(Some("rust".to_string())));
+
+        let output = info.format_display(true, true);
+        assert!(output.contains("🦀"));
+        assert!(output.contains("rust"));
+        assert!(output.contains("1.75.0"));
+    }
+
+    #[test]
+    fn test_toolbox_info_format_display_no_icons() {
+        let mut info = ToolboxInfo::new();
+        info.tools.push(ToolInfo::available("Rust".to_string(), "1.75.0".to_string())
+            .with_icon(Some("🦀".to_string())));
+
+        let output = info.format_display(false, false);
+        assert!(!output.contains("🦀"));
+        assert!(output.contains("Rust"));
+        assert!(output.contains("1.75.0"));
+    }
+
+    #[test]
+    fn test_toolbox_info_format_display_with_git() {
+        let mut info = ToolboxInfo::new();
+        info.git = Some(GitInfo {
+            branch: "main".to_string(),
+            modified_count: Some(2),
+            staged_count: None,
+            untracked_count: None,
+            is_dirty: true,
+            ahead: None,
+            behind: None,
+        });
+
+        let output = info.format_display(true, true);
+        assert!(output.contains("main"));
+        assert!(output.contains("+2"));
+    }
+
+    #[test]
+    fn test_toolbox_info_format_display_unavailable_tools_hidden() {
+        let mut info = ToolboxInfo::new();
+        info.tools.push(ToolInfo::unavailable("Ruby".to_string(), Some("not found".to_string())));
+
+        let output = info.format_display(true, true);
+        assert!(!output.contains("Ruby"));
+    }
+
+    // shorten_path tests
+    #[test]
+    fn test_shorten_path_long_path() {
+        let path = "/very/long/path/to/project";
+        let shortened = shorten_path(path);
+        assert_eq!(shortened, "…/to/project");
+    }
+
+    #[test]
+    fn test_shorten_path_short_path() {
+        let path = "/short/path";
+        let shortened = shorten_path(path);
+        assert_eq!(shortened, "/short/path");
+    }
+
+    #[test]
+    fn test_shorten_path_root() {
+        let path = "/";
+        let shortened = shorten_path(path);
+        assert_eq!(shortened, "/");
+    }
+
+    // SystemInfo tests
+    #[test]
+    fn test_system_info_default() {
+        let sys = SystemInfo {
+            memory_percent: None,
+            memory_total_gb: None,
+            memory_used_gb: None,
+            cpu_percent: None,
+        };
+        assert!(sys.memory_percent.is_none());
+        assert!(sys.cpu_percent.is_none());
+    }
+
+    // Serialization tests
+    #[test]
+    fn test_tool_info_json_roundtrip() {
+        let info = ToolInfo::available("Rust".to_string(), "1.75.0".to_string())
+            .with_icon(Some("🦀".to_string()));
+        let json = serde_json::to_string(&info).unwrap();
+        let parsed: ToolInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.name, info.name);
+        assert_eq!(parsed.version, info.version);
+    }
+
+    #[test]
+    fn test_git_info_json_roundtrip() {
+        let git = GitInfo {
+            branch: "main".to_string(),
+            modified_count: Some(1),
+            staged_count: None,
+            untracked_count: Some(2),
+            is_dirty: true,
+            ahead: Some(1),
+            behind: None,
+        };
+        let json = serde_json::to_string(&git).unwrap();
+        let parsed: GitInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.branch, git.branch);
+        assert_eq!(parsed.modified_count, git.modified_count);
+    }
+}

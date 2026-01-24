@@ -240,3 +240,130 @@ impl Config {
         self.tools.iter().filter(|t| t.enabled).collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_default_config() {
+        let config = Config::default();
+        assert!(!config.tools.is_empty());
+        assert!(config.display.show_icons);
+        assert!(config.display.compact);
+        assert_eq!(config.display.refresh_interval, 5);
+    }
+
+    #[test]
+    fn test_default_display_config() {
+        let display = DisplayConfig::default();
+        assert_eq!(display.refresh_interval, 5);
+        assert!(display.show_icons);
+        assert!(display.compact);
+    }
+
+    #[test]
+    fn test_default_extras_config() {
+        let extras = ExtrasConfig::default();
+        assert!(extras.git_branch);
+        assert!(extras.git_status);
+        assert!(!extras.system_memory);
+        assert!(!extras.system_cpu);
+        assert!(extras.current_directory);
+        assert!(extras.virtual_env);
+        assert!(!extras.shell);
+    }
+
+    #[test]
+    fn test_enabled_tools() {
+        let config = Config::default();
+        let enabled = config.enabled_tools();
+        // Check that all returned tools are enabled
+        for tool in &enabled {
+            assert!(tool.enabled);
+        }
+        // Default config has some enabled tools
+        assert!(!enabled.is_empty());
+    }
+
+    #[test]
+    fn test_config_save_and_load() {
+        let config = Config::default();
+        let temp_file = NamedTempFile::new().unwrap();
+        let path = temp_file.path().to_path_buf();
+
+        // Save
+        config.save_to_path(&path).unwrap();
+
+        // Load
+        let loaded = Config::load_from_path(&path).unwrap();
+
+        assert_eq!(loaded.tools.len(), config.tools.len());
+        assert_eq!(loaded.display.refresh_interval, config.display.refresh_interval);
+        assert_eq!(loaded.display.show_icons, config.display.show_icons);
+    }
+
+    #[test]
+    fn test_config_toml_roundtrip() {
+        let config = Config::default();
+        let toml_str = toml::to_string_pretty(&config).unwrap();
+        let parsed: Config = toml::from_str(&toml_str).unwrap();
+
+        assert_eq!(parsed.tools.len(), config.tools.len());
+        assert_eq!(parsed.display.compact, config.display.compact);
+    }
+
+    #[test]
+    fn test_tool_config_serde() {
+        let tool = ToolConfig {
+            name: "Test".to_string(),
+            command: "test --version".to_string(),
+            parse_regex: Some(r"(\d+\.\d+)".to_string()),
+            icon: Some("🔧".to_string()),
+            enabled: true,
+            short_name: Some("t".to_string()),
+        };
+
+        let toml_str = toml::to_string(&tool).unwrap();
+        let parsed: ToolConfig = toml::from_str(&toml_str).unwrap();
+
+        assert_eq!(parsed.name, tool.name);
+        assert_eq!(parsed.command, tool.command);
+        assert_eq!(parsed.parse_regex, tool.parse_regex);
+        assert_eq!(parsed.icon, tool.icon);
+        assert_eq!(parsed.enabled, tool.enabled);
+        assert_eq!(parsed.short_name, tool.short_name);
+    }
+
+    #[test]
+    fn test_config_load_nonexistent() {
+        let path = PathBuf::from("/nonexistent/path/config.toml");
+        let result = Config::load_from_path(&path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_config_load_invalid_toml() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        writeln!(temp_file, "invalid toml {{{{").unwrap();
+        let path = temp_file.path().to_path_buf();
+
+        let result = Config::load_from_path(&path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_default_tools_have_required_fields() {
+        let tools = default_tools();
+        for tool in tools {
+            assert!(!tool.name.is_empty());
+            assert!(!tool.command.is_empty());
+            // parse_regex should be valid if present
+            if let Some(ref regex) = tool.parse_regex {
+                assert!(regex::Regex::new(regex).is_ok(), "Invalid regex for {}", tool.name);
+            }
+        }
+    }
+}

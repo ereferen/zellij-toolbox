@@ -331,3 +331,267 @@ impl ToolDetector {
         &self.config
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::ToolConfig;
+
+    // Helper to create a simple ToolDetector for testing
+    fn test_detector() -> ToolDetector {
+        ToolDetector::with_defaults()
+    }
+
+    // parse_version tests
+    #[test]
+    fn test_parse_version_python() {
+        let detector = test_detector();
+        let output = "Python 3.11.4";
+        let regex = r"Python\s+(\d+\.\d+(?:\.\d+)?)";
+        let version = detector.parse_version(output, regex);
+        assert_eq!(version, Some("3.11.4".to_string()));
+    }
+
+    #[test]
+    fn test_parse_version_node() {
+        let detector = test_detector();
+        let output = "v20.10.0";
+        let regex = r"v?(\d+\.\d+(?:\.\d+)?)";
+        let version = detector.parse_version(output, regex);
+        assert_eq!(version, Some("20.10.0".to_string()));
+    }
+
+    #[test]
+    fn test_parse_version_rustc() {
+        let detector = test_detector();
+        let output = "rustc 1.75.0 (82e1608df 2023-12-21)";
+        let regex = r"rustc\s+(\d+\.\d+(?:\.\d+)?)";
+        let version = detector.parse_version(output, regex);
+        assert_eq!(version, Some("1.75.0".to_string()));
+    }
+
+    #[test]
+    fn test_parse_version_go() {
+        let detector = test_detector();
+        let output = "go version go1.21.5 linux/amd64";
+        let regex = r"go(\d+\.\d+(?:\.\d+)?)";
+        let version = detector.parse_version(output, regex);
+        assert_eq!(version, Some("1.21.5".to_string()));
+    }
+
+    #[test]
+    fn test_parse_version_docker() {
+        let detector = test_detector();
+        let output = "Docker version 24.0.7, build afdd53b";
+        let regex = r"Docker version\s+(\d+\.\d+(?:\.\d+)?)";
+        let version = detector.parse_version(output, regex);
+        assert_eq!(version, Some("24.0.7".to_string()));
+    }
+
+    #[test]
+    fn test_parse_version_ruby() {
+        let detector = test_detector();
+        let output = "ruby 3.2.2 (2023-03-30 revision e51014f9c0) [x86_64-linux]";
+        let regex = r"ruby\s+(\d+\.\d+(?:\.\d+)?)";
+        let version = detector.parse_version(output, regex);
+        assert_eq!(version, Some("3.2.2".to_string()));
+    }
+
+    #[test]
+    fn test_parse_version_java() {
+        let detector = test_detector();
+        let output = "openjdk 17.0.9 2023-10-17";
+        let regex = r"(\d+\.\d+(?:\.\d+)?)";
+        let version = detector.parse_version(output, regex);
+        assert_eq!(version, Some("17.0.9".to_string()));
+    }
+
+    #[test]
+    fn test_parse_version_no_match() {
+        let detector = test_detector();
+        let output = "some random output";
+        let regex = r"Python\s+(\d+\.\d+)";
+        let version = detector.parse_version(output, regex);
+        assert!(version.is_none());
+    }
+
+    #[test]
+    fn test_parse_version_invalid_regex() {
+        let detector = test_detector();
+        let output = "Python 3.11.4";
+        let regex = r"[invalid(regex";
+        let version = detector.parse_version(output, regex);
+        assert!(version.is_none());
+    }
+
+    #[test]
+    fn test_parse_version_two_digit() {
+        let detector = test_detector();
+        let output = "v21.5";
+        let regex = r"v?(\d+\.\d+(?:\.\d+)?)";
+        let version = detector.parse_version(output, regex);
+        assert_eq!(version, Some("21.5".to_string()));
+    }
+
+    #[test]
+    fn test_parse_version_multiline() {
+        let detector = test_detector();
+        let output = "deno 1.38.5 (release, x86_64-unknown-linux-gnu)\nv8 12.0.267.1\ntypescript 5.2.2";
+        let regex = r"deno\s+(\d+\.\d+(?:\.\d+)?)";
+        let version = detector.parse_version(output, regex);
+        assert_eq!(version, Some("1.38.5".to_string()));
+    }
+
+    // ToolDetector construction tests
+    #[test]
+    fn test_detector_with_defaults() {
+        let detector = ToolDetector::with_defaults();
+        assert!(!detector.config().tools.is_empty());
+        assert!(detector.working_dir.is_none());
+    }
+
+    #[test]
+    fn test_detector_with_working_dir() {
+        let detector = ToolDetector::with_defaults()
+            .with_working_dir("/tmp/test".to_string());
+        assert_eq!(detector.working_dir, Some("/tmp/test".to_string()));
+    }
+
+    #[test]
+    fn test_detector_new_with_config() {
+        let config = Config::default();
+        let detector = ToolDetector::new(config);
+        assert!(!detector.config().tools.is_empty());
+    }
+
+    // detect_tool tests
+    #[test]
+    fn test_detect_tool_unavailable() {
+        let detector = test_detector();
+        let tool_config = ToolConfig {
+            name: "NonExistent".to_string(),
+            command: "nonexistent_command_12345 --version".to_string(),
+            parse_regex: None,
+            icon: Some("❓".to_string()),
+            enabled: true,
+            short_name: None,
+        };
+
+        let info = detector.detect_tool(&tool_config);
+        assert!(!info.available);
+        assert!(info.error.is_some());
+        assert_eq!(info.name, "NonExistent");
+    }
+
+    #[test]
+    fn test_detect_tool_with_echo() {
+        let detector = test_detector();
+        let tool_config = ToolConfig {
+            name: "Echo".to_string(),
+            command: "echo v1.2.3".to_string(),
+            parse_regex: Some(r"v?(\d+\.\d+\.\d+)".to_string()),
+            icon: None,
+            enabled: true,
+            short_name: Some("echo".to_string()),
+        };
+
+        let info = detector.detect_tool(&tool_config);
+        assert!(info.available);
+        assert_eq!(info.version, Some("1.2.3".to_string()));
+        assert_eq!(info.short_name, Some("echo".to_string()));
+    }
+
+    #[test]
+    fn test_detect_tool_no_regex() {
+        let detector = test_detector();
+        let tool_config = ToolConfig {
+            name: "Raw".to_string(),
+            command: "echo hello world".to_string(),
+            parse_regex: None,
+            icon: None,
+            enabled: true,
+            short_name: None,
+        };
+
+        let info = detector.detect_tool(&tool_config);
+        assert!(info.available);
+        assert_eq!(info.version, Some("hello world".to_string()));
+    }
+
+    // run_version_command tests
+    #[test]
+    fn test_run_version_command_empty() {
+        let detector = test_detector();
+        let result = detector.run_version_command("");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_run_version_command_success() {
+        let detector = test_detector();
+        let result = detector.run_version_command("echo test");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().trim(), "test");
+    }
+
+    #[test]
+    fn test_run_version_command_not_found() {
+        let detector = test_detector();
+        let result = detector.run_version_command("nonexistent_cmd_xyz --version");
+        assert!(result.is_err());
+    }
+
+    // Environment variable tests
+    #[test]
+    fn test_get_virtual_env_none() {
+        // This test assumes VIRTUAL_ENV and CONDA_DEFAULT_ENV are not set
+        let detector = test_detector();
+        // We can't reliably test this without modifying env vars
+        // Just verify the method doesn't panic
+        let _ = detector.get_virtual_env();
+    }
+
+    #[test]
+    fn test_get_shell() {
+        let detector = test_detector();
+        // On most systems, SHELL should be set
+        let shell = detector.get_shell();
+        // Just verify it doesn't panic and returns a reasonable value if set
+        if let Some(s) = shell {
+            assert!(!s.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_get_current_dir() {
+        let detector = test_detector();
+        let dir = detector.get_current_dir();
+        assert!(dir.is_some());
+    }
+
+    #[test]
+    fn test_get_current_dir_with_working_dir() {
+        let detector = ToolDetector::with_defaults()
+            .with_working_dir("/tmp".to_string());
+        let dir = detector.get_current_dir();
+        assert_eq!(dir, Some("/tmp".to_string()));
+    }
+
+    // detect_all basic test
+    #[test]
+    fn test_detect_all_returns_toolbox_info() {
+        // Create a minimal config to speed up the test
+        let mut config = Config::default();
+        config.tools.clear();
+        config.extras.git_branch = false;
+        config.extras.git_status = false;
+        config.extras.system_memory = false;
+        config.extras.system_cpu = false;
+
+        let detector = ToolDetector::new(config);
+        let info = detector.detect_all();
+
+        // Should return ToolboxInfo even with no tools
+        assert!(info.tools.is_empty());
+    }
+}
