@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 use zellij_tile::prelude::*;
 
 #[derive(Default)]
+
 struct ToolboxPlugin {
     /// Display content
     content: Vec<String>,
@@ -19,6 +20,8 @@ struct ToolboxPlugin {
     refresh_interval: f64,
     /// Working directory for tool detection
     working_dir: Option<String>,
+    /// Single line display mode
+    single_line: bool,
 }
 
 register_plugin!(ToolboxPlugin);
@@ -49,11 +52,14 @@ impl ZellijPlugin for ToolboxPlugin {
         // Read working directory from configuration
         self.working_dir = configuration.get("working_dir").cloned();
 
-        // Initial content
-        self.content = vec!["─".repeat(15), " Loading...".to_string(), "─".repeat(15)];
+        // Read single line mode from configuration (default: false)
+        self.single_line = configuration
+            .get("single_line")
+            .map(|s| s == "true" || s == "1")
+            .unwrap_or(false);
 
-        // Request tool versions
-        // self.request_tool_versions();
+        // Initial content (use marker for dynamic separator)
+        self.content = vec!["---".to_string(), " Loading...".to_string(), "---".to_string()];
 
         // Start periodic refresh
         set_timeout(self.refresh_interval);
@@ -66,10 +72,10 @@ impl ZellijPlugin for ToolboxPlugin {
                     self.parse_output(&stdout);
                 } else {
                     self.content = vec![
-                        "─".repeat(15),
+                        "---".to_string(),
                         " Error".to_string(),
                         format!(" {}", String::from_utf8_lossy(&stderr)),
-                        "─".repeat(15),
+                        "---".to_string(),
                     ];
                 }
                 true
@@ -95,17 +101,25 @@ impl ZellijPlugin for ToolboxPlugin {
         self.rows = rows;
         self.cols = cols;
 
-        for (i, line) in self.content.iter().enumerate() {
-            if i >= rows {
-                break;
-            }
-            // Truncate line if too long
-            let display_line = if line.len() > cols {
-                &line[..cols]
-            } else {
-                line
-            };
+        if self.single_line {
+            // Single line mode: join all non-separator lines
+            let line = self.build_single_line();
+            let display_line: String = line.chars().take(cols).collect();
             println!("{}", display_line);
+        } else {
+            // Multi-line mode
+            for (i, line) in self.content.iter().enumerate() {
+                if i >= rows {
+                    break;
+                }
+                // Check if this is a separator line (starts with ─ or is "---" marker)
+                let display_line = if line.starts_with('─') || line == "---" {
+                    "─".repeat(cols)
+                } else {
+                    line.chars().take(cols).collect()
+                };
+                println!("{}", display_line);
+            }
         }
     }
 }
@@ -135,5 +149,17 @@ impl ToolboxPlugin {
         if self.content.is_empty() {
             self.content = vec![" No tools detected".to_string()];
         }
+    }
+
+
+    fn build_single_line(&self) -> String {
+        // Filter out separators and join with " | "
+        let parts: Vec<&str> = self
+            .content
+            .iter()
+            .filter(|line| !line.starts_with('─') && line.as_str() != "---" && !line.trim().is_empty())
+            .map(|s| s.trim())
+            .collect();
+        parts.join(" | ")
     }
 }
