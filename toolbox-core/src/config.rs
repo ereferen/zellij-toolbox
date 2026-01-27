@@ -10,18 +10,48 @@ use std::path::PathBuf;
 pub struct Config {
     /// Display settings
     pub display: DisplayConfig,
-    /// Tool definitions
+    /// Tool definitions (if specified, replaces default tools entirely)
+    #[serde(default)]
     pub tools: Vec<ToolConfig>,
+    /// Custom tools to add (merged with default tools)
+    #[serde(default)]
+    pub custom_tools: Vec<ToolConfig>,
+    /// Tool overrides (enable/disable specific default tools by name)
+    #[serde(default)]
+    pub tool_overrides: Vec<ToolOverride>,
     /// Extra information settings
     pub extras: ExtrasConfig,
+    /// Whether to use default tools as base (default: true)
+    /// If false, only custom_tools will be used
+    #[serde(default = "default_true")]
+    pub use_default_tools: bool,
+}
+
+/// Override settings for a specific tool
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolOverride {
+    /// Tool name to override (must match a default tool name)
+    pub name: String,
+    /// Whether this tool is enabled
+    #[serde(default)]
+    pub enabled: Option<bool>,
+    /// Override icon
+    #[serde(default)]
+    pub icon: Option<String>,
+    /// Override short name
+    #[serde(default)]
+    pub short_name: Option<String>,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
             display: DisplayConfig::default(),
-            tools: default_tools(),
+            tools: Vec::new(),
+            custom_tools: Vec::new(),
+            tool_overrides: Vec::new(),
             extras: ExtrasConfig::default(),
+            use_default_tools: true,
         }
     }
 }
@@ -233,7 +263,8 @@ fn default_tools() -> Vec<ToolConfig> {
         // DevOps tools
         ToolConfig {
             name: "kubectl".to_string(),
-            command: "kubectl version --client --short 2>/dev/null || kubectl version --client".to_string(),
+            command: "kubectl version --client --short 2>/dev/null || kubectl version --client"
+                .to_string(),
             parse_regex: Some(r"v?(\d+\.\d+(?:\.\d+)?)".to_string()),
             icon: Some("☸️".to_string()),
             enabled: false,
@@ -306,8 +337,8 @@ impl Config {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let content = toml::to_string_pretty(self)
-            .map_err(|e| ToolboxError::Config(e.to_string()))?;
+        let content =
+            toml::to_string_pretty(self).map_err(|e| ToolboxError::Config(e.to_string()))?;
         std::fs::write(path, content)?;
         Ok(())
     }
@@ -317,9 +348,50 @@ impl Config {
         dirs::config_dir().map(|p| p.join("toolbox").join("config.toml"))
     }
 
+    /// Get the effective list of tools (merging defaults, custom, and overrides)
+    pub fn effective_tools(&self) -> Vec<ToolConfig> {
+        // If tools are explicitly specified, use them directly
+        if !self.tools.is_empty() {
+            return self.tools.clone();
+        }
+
+        let mut result: Vec<ToolConfig> = Vec::new();
+
+        // Start with default tools if enabled
+        if self.use_default_tools {
+            for mut tool in default_tools() {
+                // Apply overrides
+                if let Some(override_config) =
+                    self.tool_overrides.iter().find(|o| o.name == tool.name)
+                {
+                    if let Some(enabled) = override_config.enabled {
+                        tool.enabled = enabled;
+                    }
+                    if let Some(ref icon) = override_config.icon {
+                        tool.icon = Some(icon.clone());
+                    }
+                    if let Some(ref short_name) = override_config.short_name {
+                        tool.short_name = Some(short_name.clone());
+                    }
+                }
+                result.push(tool);
+            }
+        }
+
+        // Add custom tools
+        for tool in &self.custom_tools {
+            result.push(tool.clone());
+        }
+
+        result
+    }
+
     /// Get only enabled tools
-    pub fn enabled_tools(&self) -> Vec<&ToolConfig> {
-        self.tools.iter().filter(|t| t.enabled).collect()
+    pub fn enabled_tools(&self) -> Vec<ToolConfig> {
+        self.effective_tools()
+            .into_iter()
+            .filter(|t| t.enabled)
+            .collect()
     }
 }
 
@@ -332,7 +404,9 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = Config::default();
-        assert!(!config.tools.is_empty());
+        // tools is empty by default, but effective_tools() returns default tools
+        assert!(config.tools.is_empty());
+        assert!(!config.effective_tools().is_empty());
         assert!(config.display.show_icons);
         assert!(config.display.compact);
         assert_eq!(config.display.refresh_interval, 5);
@@ -382,8 +456,14 @@ mod tests {
         // Load
         let loaded = Config::load_from_path(&path).unwrap();
 
-        assert_eq!(loaded.tools.len(), config.tools.len());
-        assert_eq!(loaded.display.refresh_interval, config.display.refresh_interval);
+        assert_eq!(
+            loaded.effective_tools().len(),
+            config.effective_tools().len()
+        );
+        assert_eq!(
+            loaded.display.refresh_interval,
+            config.display.refresh_interval
+        );
         assert_eq!(loaded.display.show_icons, config.display.show_icons);
     }
 
@@ -393,7 +473,10 @@ mod tests {
         let toml_str = toml::to_string_pretty(&config).unwrap();
         let parsed: Config = toml::from_str(&toml_str).unwrap();
 
-        assert_eq!(parsed.tools.len(), config.tools.len());
+        assert_eq!(
+            parsed.effective_tools().len(),
+            config.effective_tools().len()
+        );
         assert_eq!(parsed.display.compact, config.display.compact);
     }
 
@@ -444,8 +527,123 @@ mod tests {
             assert!(!tool.command.is_empty());
             // parse_regex should be valid if present
             if let Some(ref regex) = tool.parse_regex {
-                assert!(regex::Regex::new(regex).is_ok(), "Invalid regex for {}", tool.name);
+                assert!(
+                    regex::Regex::new(regex).is_ok(),
+                    "Invalid regex for {}",
+                    tool.name
+                );
             }
         }
+    }
+
+    #[test]
+    fn test_custom_tools_merged_with_defaults() {
+        let mut config = Config::default();
+        config.custom_tools.push(ToolConfig {
+            name: "MyCustomTool".to_string(),
+            command: "my-tool --version".to_string(),
+            parse_regex: None,
+            icon: Some("🔧".to_string()),
+            enabled: true,
+            short_name: Some("mct".to_string()),
+        });
+
+        let tools = config.effective_tools();
+        // Should have default tools + custom tool
+        assert!(tools.len() > 1);
+        assert!(tools.iter().any(|t| t.name == "MyCustomTool"));
+        // Default tools should still be there
+        assert!(tools.iter().any(|t| t.name == "Python"));
+    }
+
+    #[test]
+    fn test_tool_overrides() {
+        let mut config = Config::default();
+        // Python is enabled by default, let's disable it
+        config.tool_overrides.push(ToolOverride {
+            name: "Python".to_string(),
+            enabled: Some(false),
+            icon: None,
+            short_name: None,
+        });
+        // Ruby is disabled by default, let's enable it
+        config.tool_overrides.push(ToolOverride {
+            name: "Ruby".to_string(),
+            enabled: Some(true),
+            icon: Some("💎💎".to_string()),
+            short_name: None,
+        });
+
+        let tools = config.effective_tools();
+        let python = tools.iter().find(|t| t.name == "Python").unwrap();
+        assert!(!python.enabled);
+
+        let ruby = tools.iter().find(|t| t.name == "Ruby").unwrap();
+        assert!(ruby.enabled);
+        assert_eq!(ruby.icon, Some("💎💎".to_string()));
+    }
+
+    #[test]
+    fn test_use_default_tools_false() {
+        let mut config = Config::default();
+        config.use_default_tools = false;
+        config.custom_tools.push(ToolConfig {
+            name: "OnlyThis".to_string(),
+            command: "only-this --version".to_string(),
+            parse_regex: None,
+            icon: None,
+            enabled: true,
+            short_name: None,
+        });
+
+        let tools = config.effective_tools();
+        // Should only have the custom tool
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].name, "OnlyThis");
+    }
+
+    #[test]
+    fn test_explicit_tools_override_everything() {
+        let mut config = Config::default();
+        config.tools.push(ToolConfig {
+            name: "ExplicitTool".to_string(),
+            command: "explicit --version".to_string(),
+            parse_regex: None,
+            icon: None,
+            enabled: true,
+            short_name: None,
+        });
+
+        let tools = config.effective_tools();
+        // When tools is non-empty, it overrides everything
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].name, "ExplicitTool");
+    }
+
+    #[test]
+    fn test_load_config_with_custom_tools() {
+        let toml_content = r#"
+[display]
+show_icons = true
+compact = true
+
+[[custom_tools]]
+name = "MyTool"
+command = "my-tool --version"
+enabled = true
+
+[[tool_overrides]]
+name = "Docker"
+enabled = false
+"#;
+
+        let config: Config = toml::from_str(toml_content).unwrap();
+        let tools = config.effective_tools();
+
+        // Should have default tools + custom tool
+        assert!(tools.iter().any(|t| t.name == "MyTool"));
+        // Docker should be disabled
+        let docker = tools.iter().find(|t| t.name == "Docker").unwrap();
+        assert!(!docker.enabled);
     }
 }
