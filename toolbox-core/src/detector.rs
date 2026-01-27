@@ -50,7 +50,7 @@ impl ToolDetector {
         }
 
         // Tool versions
-        for tool_config in self.config.enabled_tools() {
+        for tool_config in &self.config.enabled_tools() {
             let tool_info = self.detect_tool(tool_config);
             info.tools.push(tool_info);
         }
@@ -113,9 +113,9 @@ impl ToolDetector {
         }
 
         // Inherit PATH and other environment variables for asdf/mise support
-        let output = cmd.output().map_err(|e| {
-            ToolboxError::CommandFailed(format!("{}: {}", parts[0], e))
-        })?;
+        let output = cmd
+            .output()
+            .map_err(|e| ToolboxError::CommandFailed(format!("{}: {}", parts[0], e)))?;
 
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -239,7 +239,9 @@ impl ToolDetector {
 
         // Get the branch name and create a Branch object
         let branch_name = head.shorthand()?;
-        let branch = repo.find_branch(branch_name, git2::BranchType::Local).ok()?;
+        let branch = repo
+            .find_branch(branch_name, git2::BranchType::Local)
+            .ok()?;
 
         // Get the upstream branch
         let upstream = branch.upstream().ok()?;
@@ -281,7 +283,11 @@ impl ToolDetector {
     fn get_shell(&self) -> Option<String> {
         std::env::var("SHELL")
             .ok()
-            .and_then(|s| Path::new(&s).file_name().map(|n| n.to_str().map(String::from)))
+            .and_then(|s| {
+                Path::new(&s)
+                    .file_name()
+                    .map(|n| n.to_str().map(String::from))
+            })
             .flatten()
     }
 
@@ -313,8 +319,8 @@ impl ToolDetector {
             // Need to wait a bit for accurate CPU readings
             std::thread::sleep(std::time::Duration::from_millis(100));
             sys.refresh_cpu_usage();
-            let cpu_usage: f32 = sys.cpus().iter().map(|c| c.cpu_usage()).sum::<f32>()
-                / sys.cpus().len() as f32;
+            let cpu_usage: f32 =
+                sys.cpus().iter().map(|c| c.cpu_usage()).sum::<f32>() / sys.cpus().len() as f32;
             info.cpu_percent = Some(cpu_usage);
         }
 
@@ -436,7 +442,8 @@ mod tests {
     #[test]
     fn test_parse_version_multiline() {
         let detector = test_detector();
-        let output = "deno 1.38.5 (release, x86_64-unknown-linux-gnu)\nv8 12.0.267.1\ntypescript 5.2.2";
+        let output =
+            "deno 1.38.5 (release, x86_64-unknown-linux-gnu)\nv8 12.0.267.1\ntypescript 5.2.2";
         let regex = r"deno\s+(\d+\.\d+(?:\.\d+)?)";
         let version = detector.parse_version(output, regex);
         assert_eq!(version, Some("1.38.5".to_string()));
@@ -446,14 +453,13 @@ mod tests {
     #[test]
     fn test_detector_with_defaults() {
         let detector = ToolDetector::with_defaults();
-        assert!(!detector.config().tools.is_empty());
+        assert!(!detector.config().effective_tools().is_empty());
         assert!(detector.working_dir.is_none());
     }
 
     #[test]
     fn test_detector_with_working_dir() {
-        let detector = ToolDetector::with_defaults()
-            .with_working_dir("/tmp/test".to_string());
+        let detector = ToolDetector::with_defaults().with_working_dir("/tmp/test".to_string());
         assert_eq!(detector.working_dir, Some("/tmp/test".to_string()));
     }
 
@@ -461,7 +467,7 @@ mod tests {
     fn test_detector_new_with_config() {
         let config = Config::default();
         let detector = ToolDetector::new(config);
-        assert!(!detector.config().tools.is_empty());
+        assert!(!detector.config().effective_tools().is_empty());
     }
 
     // detect_tool tests
@@ -571,8 +577,7 @@ mod tests {
 
     #[test]
     fn test_get_current_dir_with_working_dir() {
-        let detector = ToolDetector::with_defaults()
-            .with_working_dir("/tmp".to_string());
+        let detector = ToolDetector::with_defaults().with_working_dir("/tmp".to_string());
         let dir = detector.get_current_dir();
         assert_eq!(dir, Some("/tmp".to_string()));
     }
@@ -582,7 +587,7 @@ mod tests {
     fn test_detect_all_returns_toolbox_info() {
         // Create a minimal config to speed up the test
         let mut config = Config::default();
-        config.tools.clear();
+        config.use_default_tools = false; // Disable default tools
         config.extras.git_branch = false;
         config.extras.git_status = false;
         config.extras.system_memory = false;
