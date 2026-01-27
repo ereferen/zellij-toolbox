@@ -280,11 +280,16 @@ impl ToolboxInfo {
         lines.join("\n")
     }
 
-
     /// Format for display as a powerline-style colored output
     /// If single_line is true, all segments are joined in one line
     /// If false, each segment is on its own line with colored background
-    pub fn format_powerline(&self, compact: bool, show_icons: bool, use_color: bool, single_line: bool) -> String {
+    pub fn format_powerline(
+        &self,
+        compact: bool,
+        show_icons: bool,
+        use_color: bool,
+        single_line: bool,
+    ) -> String {
         use crate::color::{render_powerline, render_powerline_multiline, Segment};
 
         let mut segments = Vec::new();
@@ -334,13 +339,9 @@ impl ToolboxInfo {
 
         // Tools - group them or show individually
         let available_tools: Vec<_> = self.tools.iter().filter(|t| t.available).collect();
-        
+
         // Define colors to cycle through for tools
-        let tool_colors = [
-            Segment::cyan,
-            Segment::magenta,
-            Segment::gray,
-        ];
+        let tool_colors = [Segment::cyan, Segment::magenta, Segment::gray];
 
         for (i, tool) in available_tools.iter().enumerate() {
             let name = if compact {
@@ -399,7 +400,7 @@ fn shorten_path(path: &str) -> String {
     // If path is too long, show only last 2 components
     let parts: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
     if parts.len() > 2 {
-        format!("…/{}", parts[parts.len()-2..].join("/"))
+        format!("…/{}", parts[parts.len() - 2..].join("/"))
     } else {
         path.to_string()
     }
@@ -580,9 +581,11 @@ mod tests {
     #[test]
     fn test_toolbox_info_format_display_with_tools() {
         let mut info = ToolboxInfo::new();
-        info.tools.push(ToolInfo::available("Rust".to_string(), "1.75.0".to_string())
-            .with_icon(Some("🦀".to_string()))
-            .with_short_name(Some("rust".to_string())));
+        info.tools.push(
+            ToolInfo::available("Rust".to_string(), "1.75.0".to_string())
+                .with_icon(Some("🦀".to_string()))
+                .with_short_name(Some("rust".to_string())),
+        );
 
         let output = info.format_display(true, true);
         assert!(output.contains("🦀"));
@@ -593,8 +596,10 @@ mod tests {
     #[test]
     fn test_toolbox_info_format_display_no_icons() {
         let mut info = ToolboxInfo::new();
-        info.tools.push(ToolInfo::available("Rust".to_string(), "1.75.0".to_string())
-            .with_icon(Some("🦀".to_string())));
+        info.tools.push(
+            ToolInfo::available("Rust".to_string(), "1.75.0".to_string())
+                .with_icon(Some("🦀".to_string())),
+        );
 
         let output = info.format_display(false, false);
         assert!(!output.contains("🦀"));
@@ -623,7 +628,10 @@ mod tests {
     #[test]
     fn test_toolbox_info_format_display_unavailable_tools_hidden() {
         let mut info = ToolboxInfo::new();
-        info.tools.push(ToolInfo::unavailable("Ruby".to_string(), Some("not found".to_string())));
+        info.tools.push(ToolInfo::unavailable(
+            "Ruby".to_string(),
+            Some("not found".to_string()),
+        ));
 
         let output = info.format_display(true, true);
         assert!(!output.contains("Ruby"));

@@ -105,7 +105,10 @@ fn main() -> Result<()> {
             let show_icons = !cli.no_icons && detector.config().display.show_icons;
 
             if cli.powerline {
-                println!("{}", info.format_powerline(compact, show_icons, use_color, cli.single_line));
+                println!(
+                    "{}",
+                    info.format_powerline(compact, show_icons, use_color, cli.single_line)
+                );
             } else {
                 println!("{}", info.format_display(compact, show_icons));
             }
@@ -133,10 +136,7 @@ fn handle_command(command: &Commands, cli: &Cli) -> Result<()> {
             };
 
             if config_path.exists() && !force {
-                eprintln!(
-                    "Config file already exists at: {}",
-                    config_path.display()
-                );
+                eprintln!("Config file already exists at: {}", config_path.display());
                 eprintln!("Use --force to overwrite");
                 return Ok(());
             }
@@ -163,10 +163,7 @@ fn handle_command(command: &Commands, cli: &Cli) -> Result<()> {
             for tool in &config.tools {
                 let status = if tool.enabled { "enabled" } else { "disabled" };
                 let icon = tool.icon.as_deref().unwrap_or(" ");
-                println!(
-                    "  {} {} ({}) - {}",
-                    icon, tool.name, status, tool.command
-                );
+                println!("  {} {} ({}) - {}", icon, tool.name, status, tool.command);
             }
             println!("\nEdit your config file to enable/disable tools or add custom ones.");
             if let Some(path) = Config::config_path() {

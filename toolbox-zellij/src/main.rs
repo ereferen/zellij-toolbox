@@ -78,7 +78,11 @@ impl ZellijPlugin for ToolboxPlugin {
             .unwrap_or(false);
 
         // Initial content (use marker for dynamic separator)
-        self.content = vec!["---".to_string(), " Loading...".to_string(), "---".to_string()];
+        self.content = vec![
+            "---".to_string(),
+            " Loading...".to_string(),
+            "---".to_string(),
+        ];
 
         // Trigger first refresh immediately (short timer to avoid I/O error in load)
         set_timeout(0.1);
@@ -155,7 +159,7 @@ impl ToolboxPlugin {
             args.push("--powerline");
             args.push("--color");
             args.push("always");
-            
+
             // Add single line flag if enabled
             if self.single_line {
                 args.push("--single-line");
@@ -183,13 +187,14 @@ impl ToolboxPlugin {
         }
     }
 
-
     fn build_single_line(&self) -> String {
         // Filter out separators and join with " | "
         let parts: Vec<&str> = self
             .content
             .iter()
-            .filter(|line| !line.starts_with('─') && line.as_str() != "---" && !line.trim().is_empty())
+            .filter(|line| {
+                !line.starts_with('─') && line.as_str() != "---" && !line.trim().is_empty()
+            })
             .map(|s| s.trim())
             .collect();
         parts.join(" | ")

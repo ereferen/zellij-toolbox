@@ -34,8 +34,8 @@ pub mod ansi {
 }
 
 /// Powerline separator characters
-pub const SEPARATOR_RIGHT: char = '\u{E0B0}'; // 
-pub const SEPARATOR_RIGHT_THIN: char = '\u{E0B1}'; // 
+pub const SEPARATOR_RIGHT: char = '\u{E0B0}'; //
+pub const SEPARATOR_RIGHT_THIN: char = '\u{E0B1}'; //
 
 /// Color mode for output
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -72,7 +72,12 @@ pub struct Segment {
 }
 
 impl Segment {
-    pub fn new(text: impl Into<String>, fg: &'static str, bg: &'static str, bg_color_fg: &'static str) -> Self {
+    pub fn new(
+        text: impl Into<String>,
+        fg: &'static str,
+        bg: &'static str,
+        bg_color_fg: &'static str,
+    ) -> Self {
         Self {
             text: text.into(),
             fg,
@@ -158,7 +163,6 @@ pub fn render_powerline(segments: &[Segment], use_color: bool) -> String {
     result
 }
 
-
 /// Render segments as multiline powerline (each segment on its own line)
 pub fn render_powerline_multiline(segments: &[Segment], use_color: bool) -> String {
     if !use_color || segments.is_empty() {
@@ -174,20 +178,20 @@ pub fn render_powerline_multiline(segments: &[Segment], use_color: bool) -> Stri
 
     for segment in segments {
         let mut line = String::new();
-        
+
         // Background and foreground for this segment
         line.push_str(segment.bg);
         line.push_str(segment.fg);
         line.push(' ');
         line.push_str(&segment.text);
         line.push(' ');
-        
+
         // End of line separator
         line.push_str(ansi::RESET);
         line.push_str(segment.bg_color_fg);
         line.push(SEPARATOR_RIGHT);
         line.push_str(ansi::RESET);
-        
+
         lines.push(line);
     }
 
@@ -227,20 +231,14 @@ mod tests {
 
     #[test]
     fn test_render_powerline_no_color() {
-        let segments = vec![
-            Segment::blue("dir"),
-            Segment::green("main"),
-        ];
+        let segments = vec![Segment::blue("dir"), Segment::green("main")];
         let result = render_powerline(&segments, false);
         assert_eq!(result, "dir | main");
     }
 
     #[test]
     fn test_render_powerline_with_color() {
-        let segments = vec![
-            Segment::blue("dir"),
-            Segment::green("main"),
-        ];
+        let segments = vec![Segment::blue("dir"), Segment::green("main")];
         let result = render_powerline(&segments, true);
         assert!(result.contains("\x1b[")); // Contains ANSI codes
         assert!(result.contains("dir"));
