@@ -203,12 +203,36 @@ impl ToolboxPlugin {
 
 /// Truncate a string to fit within a given display width
 /// Accounts for Unicode character widths (e.g., emojis are width 2)
+/// Properly skips ANSI escape sequences (they have zero display width)
 #[cfg(target_arch = "wasm32")]
 fn truncate_to_width(s: &str, max_width: usize) -> String {
     let mut result = String::new();
     let mut current_width = 0;
+    let mut chars = s.chars().peekable();
 
-    for c in s.chars() {
+    while let Some(c) = chars.next() {
+        // Check for ANSI escape sequence start
+        if c == '\x1b' {
+            // Add the escape character
+            result.push(c);
+
+            // Check for CSI sequence (ESC [)
+            if chars.peek() == Some(&'[') {
+                result.push(chars.next().unwrap()); // consume '['
+
+                // Read until we hit a letter (the final byte of the sequence)
+                while let Some(&next_c) = chars.peek() {
+                    result.push(chars.next().unwrap());
+                    // CSI sequences end with a letter in range 0x40-0x7E
+                    if next_c.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            }
+            // ANSI sequences have zero display width, so don't add to current_width
+            continue;
+        }
+
         let char_width = UnicodeWidthChar::width(c).unwrap_or(0);
         if current_width + char_width > max_width {
             break;
