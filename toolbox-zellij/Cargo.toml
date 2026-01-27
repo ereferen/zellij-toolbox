@@ -7,9 +7,14 @@ license.workspace = true
 description = "Zellij plugin for displaying development tool versions"
 
 [dependencies]
-toolbox-core = { workspace = true, default-features = false, features = [
-    "wasm",
-] }
+
+# NOTE:
+# `toolbox-zellij` is a Zellij *WASM* plugin.
+# When building the whole workspace for the native host (e.g. `cargo build`),
+# we must not link `zellij-tile`, because it depends on host-provided symbols.
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+toolbox-core = { workspace = true, default-features = false, features = ["wasm"] }
 zellij-tile = "0.43.1"
 serde = { workspace = true }
 serde_json = { workspace = true }

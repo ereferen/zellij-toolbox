@@ -4,12 +4,20 @@
 //! Note: WASM environment has limitations - we can't directly run commands.
 //! The plugin will need to communicate with the CLI tool for updates.
 
+// This crate is a Zellij WASM plugin. For native targets we build a tiny stub
+// binary so `cargo build` for the workspace succeeds.
+
+#[cfg(target_arch = "wasm32")]
 use std::collections::BTreeMap;
+
+#[cfg(target_arch = "wasm32")]
 use unicode_width::UnicodeWidthChar;
+
+#[cfg(target_arch = "wasm32")]
 use zellij_tile::prelude::*;
 
+#[cfg(target_arch = "wasm32")]
 #[derive(Default)]
-
 struct ToolboxPlugin {
     /// Display content
     content: Vec<String>,
@@ -27,8 +35,10 @@ struct ToolboxPlugin {
     powerline: bool,
 }
 
+#[cfg(target_arch = "wasm32")]
 register_plugin!(ToolboxPlugin);
 
+#[cfg(target_arch = "wasm32")]
 impl ZellijPlugin for ToolboxPlugin {
     fn load(&mut self, configuration: BTreeMap<String, String>) {
         // Request permissions
@@ -133,6 +143,7 @@ impl ZellijPlugin for ToolboxPlugin {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 impl ToolboxPlugin {
     fn request_tool_versions(&self) {
         // Run the toolbox CLI to get versions
@@ -187,6 +198,7 @@ impl ToolboxPlugin {
 
 /// Truncate a string to fit within a given display width
 /// Accounts for Unicode character widths (e.g., emojis are width 2)
+#[cfg(target_arch = "wasm32")]
 fn truncate_to_width(s: &str, max_width: usize) -> String {
     let mut result = String::new();
     let mut current_width = 0;
@@ -201,4 +213,11 @@ fn truncate_to_width(s: &str, max_width: usize) -> String {
     }
 
     result
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn main() {
+    eprintln!(
+        "toolbox-zellij is a Zellij WASM plugin. Build it with: cargo build -p toolbox-zellij --release --target wasm32-wasip1"
+    );
 }
