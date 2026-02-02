@@ -17,6 +17,7 @@
       "Bash(find:*)",
       "Bash(grep:*)",
       "Bash(rg:*)",
+      "Bash(curl:*)",
       "Bash(./target/release/toolbox:*)",
       "Bash(./target/debug/toolbox:*)",
       "Read",
