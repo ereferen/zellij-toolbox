@@ -585,8 +585,10 @@ mod tests {
 
     #[test]
     fn test_use_default_tools_false() {
-        let mut config = Config::default();
-        config.use_default_tools = false;
+        let mut config = Config {
+            use_default_tools: false,
+            ..Config::default()
+        };
         config.custom_tools.push(ToolConfig {
             name: "OnlyThis".to_string(),
             command: "only-this --version".to_string(),

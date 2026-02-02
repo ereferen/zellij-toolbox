@@ -160,7 +160,7 @@ fn handle_command(command: &Commands, cli: &Cli) -> Result<()> {
         Commands::ListTools => {
             let config = Config::default();
             println!("Available tools:\n");
-            for tool in &config.tools {
+            for tool in &config.effective_tools() {
                 let status = if tool.enabled { "enabled" } else { "disabled" };
                 let icon = tool.icon.as_deref().unwrap_or(" ");
                 println!("  {} {} ({}) - {}", icon, tool.name, status, tool.command);

@@ -586,12 +586,17 @@ mod tests {
     #[test]
     fn test_detect_all_returns_toolbox_info() {
         // Create a minimal config to speed up the test
-        let mut config = Config::default();
-        config.use_default_tools = false; // Disable default tools
-        config.extras.git_branch = false;
-        config.extras.git_status = false;
-        config.extras.system_memory = false;
-        config.extras.system_cpu = false;
+        let config = Config {
+            use_default_tools: false,
+            extras: crate::config::ExtrasConfig {
+                git_branch: false,
+                git_status: false,
+                system_memory: false,
+                system_cpu: false,
+                ..Default::default()
+            },
+            ..Config::default()
+        };
 
         let detector = ToolDetector::new(config);
         let info = detector.detect_all();
