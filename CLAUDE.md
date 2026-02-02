@@ -25,8 +25,10 @@ toolbox/
 │       └── color.rs        # ANSIカラーとPowerlineレンダリング
 ├── toolbox-cli/            # CLIツール
 │   ├── Cargo.toml
-│   └── src/
-│       └── main.rs
+│   ├── src/
+│   │   └── main.rs
+│   └── tests/
+│       └── cli_integration.rs  # CLI統合テスト（assert_cmd）
 └── toolbox-zellij/         # Zellijプラグイン
     ├── Cargo.toml
     └── src/
@@ -142,11 +144,67 @@ ZellijのWASMプラグイン。CLIを呼び出して結果を表示する。
 - [x] 仮想環境検出（Python venv, Conda）
 - [x] DevContainer設定
 
+## テストルール（必須）
+
+開発時は以下のルールを必ず守ること。
+
+### 基本原則
+
+1. **機能実装後は必ずテストを書く** — テストなしのマージは禁止
+2. **テストが通ることを確認してからコミット** — `cargo test --workspace` を実行
+3. **CIが通ることを確認してからマージ** — fmt / clippy / test / build すべてパス必須
+
+### テストの書き方
+
+| 対象 | テスト種類 | 場所 |
+|------|-----------|------|
+| toolbox-core の各モジュール | ユニットテスト | 各 `src/*.rs` 内の `#[cfg(test)] mod tests` |
+| CLI のサブコマンド・オプション | 統合テスト | `toolbox-cli/tests/cli_integration.rs` |
+| Zellij プラグイン | （今後整備） | `toolbox-zellij/tests/` |
+
+### 必須チェックリスト
+
+機能追加・バグ修正時に以下を確認：
+
+- [ ] ユニットテストを追加した（正常系・異常系）
+- [ ] `cargo test --workspace` が全て通る
+- [ ] `cargo fmt --check` でフォーマット違反がない
+- [ ] `cargo clippy -- -D warnings` で警告がない
+- [ ] CLI に影響する変更は統合テスト (`toolbox-cli/tests/`) も追加した
+
+### テスト実行コマンド
+
+```bash
+# 全テスト実行
+cargo test --workspace
+
+# 特定パッケージのテスト
+cargo test -p toolbox-core
+cargo test -p toolbox-cli
+
+# 特定テストのみ実行
+cargo test test_name
+
+# テスト + lint + fmt（CI相当）
+cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
+```
+
+### CI パイプライン
+
+`.github/workflows/ci.yml` で以下を自動実行：
+
+- `cargo fmt --check` — フォーマットチェック
+- `cargo clippy -- -D warnings` — リントチェック
+- `cargo test --workspace` — 全テスト
+- `cargo build -p toolbox-cli` — CLIビルド
+- `cargo build -p toolbox-zellij --target wasm32-wasip1` — WASMビルド
+
 ## TODO
 
 - [ ] pane の working directory 取得と自動更新（Zellijイベントから自動取得）
-- [ ] CI/CD パイプライン（テスト・ビルド・リリース自動化）
-- [ ] テスト環境の整備（MCP、スナップショットテスト等）
+- [x] CI/CD パイプライン（テスト・ビルド・リリース自動化）
+- [x] CLI統合テスト（assert_cmd + predicates）
+- [ ] スナップショットテスト（insta クレート）
 - [ ] Zellijプラグインの統合テスト
 - [ ] カラーテーマのカスタマイズ対応
 - [ ] ドキュメントの多言語化（日本語・英語）

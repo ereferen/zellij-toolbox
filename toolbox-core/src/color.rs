@@ -215,6 +215,8 @@ pub fn should_use_color(mode: ColorMode) -> bool {
 mod tests {
     use super::*;
 
+    // --- ColorMode ---
+
     #[test]
     fn test_color_mode_from_str() {
         assert_eq!("auto".parse::<ColorMode>().unwrap(), ColorMode::Auto);
@@ -224,10 +226,111 @@ mod tests {
     }
 
     #[test]
+    fn test_color_mode_from_str_case_insensitive() {
+        assert_eq!("AUTO".parse::<ColorMode>().unwrap(), ColorMode::Auto);
+        assert_eq!("Always".parse::<ColorMode>().unwrap(), ColorMode::Always);
+        assert_eq!("NEVER".parse::<ColorMode>().unwrap(), ColorMode::Never);
+    }
+
+    #[test]
+    fn test_color_mode_default() {
+        assert_eq!(ColorMode::default(), ColorMode::Auto);
+    }
+
+    #[test]
+    fn test_color_mode_invalid_error_message() {
+        let err = "invalid".parse::<ColorMode>().unwrap_err();
+        assert!(err.contains("Invalid color mode"));
+        assert!(err.contains("invalid"));
+    }
+
+    // --- Segment constructors ---
+
+    #[test]
     fn test_segment_creation() {
         let seg = Segment::blue("test");
         assert_eq!(seg.text, "test");
     }
+
+    #[test]
+    fn test_segment_blue() {
+        let seg = Segment::blue("dir");
+        assert_eq!(seg.text, "dir");
+        assert_eq!(seg.fg, ansi::FG_WHITE);
+        assert_eq!(seg.bg, ansi::BG_BLUE);
+        assert_eq!(seg.bg_color_fg, ansi::FG_BLUE);
+    }
+
+    #[test]
+    fn test_segment_green() {
+        let seg = Segment::green("ok");
+        assert_eq!(seg.text, "ok");
+        assert_eq!(seg.fg, ansi::FG_BLACK);
+        assert_eq!(seg.bg, ansi::BG_GREEN);
+        assert_eq!(seg.bg_color_fg, ansi::FG_GREEN);
+    }
+
+    #[test]
+    fn test_segment_yellow() {
+        let seg = Segment::yellow("warn");
+        assert_eq!(seg.text, "warn");
+        assert_eq!(seg.fg, ansi::FG_BLACK);
+        assert_eq!(seg.bg, ansi::BG_YELLOW);
+        assert_eq!(seg.bg_color_fg, ansi::FG_YELLOW);
+    }
+
+    #[test]
+    fn test_segment_cyan() {
+        let seg = Segment::cyan("info");
+        assert_eq!(seg.text, "info");
+        assert_eq!(seg.fg, ansi::FG_BLACK);
+        assert_eq!(seg.bg, ansi::BG_CYAN);
+        assert_eq!(seg.bg_color_fg, ansi::FG_CYAN);
+    }
+
+    #[test]
+    fn test_segment_magenta() {
+        let seg = Segment::magenta("special");
+        assert_eq!(seg.text, "special");
+        assert_eq!(seg.fg, ansi::FG_WHITE);
+        assert_eq!(seg.bg, ansi::BG_MAGENTA);
+        assert_eq!(seg.bg_color_fg, ansi::FG_MAGENTA);
+    }
+
+    #[test]
+    fn test_segment_gray() {
+        let seg = Segment::gray("muted");
+        assert_eq!(seg.text, "muted");
+        assert_eq!(seg.fg, ansi::FG_WHITE);
+        assert_eq!(seg.bg, ansi::BG_GRAY);
+        assert_eq!(seg.bg_color_fg, ansi::FG_GRAY);
+    }
+
+    #[test]
+    fn test_segment_dark_gray() {
+        let seg = Segment::dark_gray("bg");
+        assert_eq!(seg.text, "bg");
+        assert_eq!(seg.fg, ansi::FG_WHITE);
+        assert_eq!(seg.bg, ansi::BG_DARK_GRAY);
+        assert_eq!(seg.bg_color_fg, ansi::FG_DARK_GRAY);
+    }
+
+    #[test]
+    fn test_segment_new_custom() {
+        let seg = Segment::new("custom", ansi::FG_BLACK, ansi::BG_RED, ansi::FG_RED);
+        assert_eq!(seg.text, "custom");
+        assert_eq!(seg.fg, ansi::FG_BLACK);
+        assert_eq!(seg.bg, ansi::BG_RED);
+        assert_eq!(seg.bg_color_fg, ansi::FG_RED);
+    }
+
+    #[test]
+    fn test_segment_from_string_type() {
+        let seg = Segment::blue(String::from("owned"));
+        assert_eq!(seg.text, "owned");
+    }
+
+    // --- render_powerline ---
 
     #[test]
     fn test_render_powerline_no_color() {
@@ -243,5 +346,119 @@ mod tests {
         assert!(result.contains("\x1b[")); // Contains ANSI codes
         assert!(result.contains("dir"));
         assert!(result.contains("main"));
+    }
+
+    #[test]
+    fn test_render_powerline_empty() {
+        let segments: Vec<Segment> = vec![];
+        let result = render_powerline(&segments, true);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_render_powerline_empty_no_color() {
+        let segments: Vec<Segment> = vec![];
+        let result = render_powerline(&segments, false);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_render_powerline_single_segment() {
+        let segments = vec![Segment::blue("only")];
+        let result = render_powerline(&segments, true);
+        assert!(result.contains("only"));
+        assert!(result.contains(ansi::RESET));
+    }
+
+    #[test]
+    fn test_render_powerline_single_segment_no_color() {
+        let segments = vec![Segment::blue("only")];
+        let result = render_powerline(&segments, false);
+        assert_eq!(result, "only");
+    }
+
+    #[test]
+    fn test_render_powerline_separator_present() {
+        let segments = vec![Segment::blue("a"), Segment::green("b")];
+        let result = render_powerline(&segments, true);
+        assert!(result.contains(SEPARATOR_RIGHT));
+    }
+
+    #[test]
+    fn test_render_powerline_three_segments() {
+        let segments = vec![
+            Segment::blue("one"),
+            Segment::green("two"),
+            Segment::cyan("three"),
+        ];
+        let result = render_powerline(&segments, true);
+        assert!(result.contains("one"));
+        assert!(result.contains("two"));
+        assert!(result.contains("three"));
+    }
+
+    #[test]
+    fn test_render_powerline_ends_with_reset() {
+        let segments = vec![Segment::blue("test")];
+        let result = render_powerline(&segments, true);
+        assert!(result.ends_with(ansi::RESET));
+    }
+
+    // --- render_powerline_multiline ---
+
+    #[test]
+    fn test_render_powerline_multiline_no_color() {
+        let segments = vec![Segment::blue("dir"), Segment::green("main")];
+        let result = render_powerline_multiline(&segments, false);
+        assert_eq!(result, " dir\n main");
+    }
+
+    #[test]
+    fn test_render_powerline_multiline_with_color() {
+        let segments = vec![Segment::blue("dir"), Segment::green("main")];
+        let result = render_powerline_multiline(&segments, true);
+        assert!(result.contains("dir"));
+        assert!(result.contains("main"));
+        assert!(result.contains('\n'));
+        assert!(result.contains(ansi::RESET));
+    }
+
+    #[test]
+    fn test_render_powerline_multiline_empty() {
+        let segments: Vec<Segment> = vec![];
+        let result = render_powerline_multiline(&segments, true);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_render_powerline_multiline_single() {
+        let segments = vec![Segment::cyan("only")];
+        let result = render_powerline_multiline(&segments, true);
+        assert!(result.contains("only"));
+        assert!(!result.contains('\n'));
+    }
+
+    #[test]
+    fn test_render_powerline_multiline_each_line_has_separator() {
+        let segments = vec![Segment::blue("a"), Segment::green("b")];
+        let result = render_powerline_multiline(&segments, true);
+        for line in result.lines() {
+            assert!(
+                line.contains(SEPARATOR_RIGHT),
+                "Each line should have separator"
+            );
+        }
+    }
+
+    // --- should_use_color ---
+
+    #[test]
+    fn test_should_use_color_always() {
+        assert!(should_use_color(ColorMode::Always));
+    }
+
+    #[test]
+    fn test_should_use_color_never() {
+        assert!(!should_use_color(ColorMode::Never));
     }
 }

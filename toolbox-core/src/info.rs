@@ -699,4 +699,301 @@ mod tests {
         assert_eq!(parsed.branch, git.branch);
         assert_eq!(parsed.modified_count, git.modified_count);
     }
+
+    // --- format_display additional tests ---
+
+    #[test]
+    fn test_toolbox_info_format_display_with_virtual_env() {
+        let mut info = ToolboxInfo::new();
+        info.virtual_env = Some("myenv".to_string());
+        info.tools.push(ToolInfo::available(
+            "Python".to_string(),
+            "3.12.0".to_string(),
+        ));
+
+        let output = info.format_display(false, true);
+        assert!(output.contains("myenv"));
+    }
+
+    #[test]
+    fn test_toolbox_info_format_display_virtual_env_no_icons() {
+        let mut info = ToolboxInfo::new();
+        info.virtual_env = Some("myenv".to_string());
+        info.tools.push(ToolInfo::available(
+            "Python".to_string(),
+            "3.12.0".to_string(),
+        ));
+
+        let output = info.format_display(false, false);
+        assert!(output.contains("venv: myenv"));
+    }
+
+    #[test]
+    fn test_toolbox_info_format_display_with_system_info() {
+        let mut info = ToolboxInfo::new();
+        info.system = Some(SystemInfo {
+            memory_percent: Some(50.0),
+            memory_total_gb: Some(16.0),
+            memory_used_gb: Some(8.0),
+            cpu_percent: Some(25.0),
+        });
+
+        let output = info.format_display(false, true);
+        assert!(output.contains("50%"));
+        assert!(output.contains("25%"));
+    }
+
+    #[test]
+    fn test_toolbox_info_format_display_system_no_icons() {
+        let mut info = ToolboxInfo::new();
+        info.system = Some(SystemInfo {
+            memory_percent: Some(75.0),
+            memory_total_gb: None,
+            memory_used_gb: None,
+            cpu_percent: Some(50.0),
+        });
+
+        let output = info.format_display(false, false);
+        assert!(output.contains("mem: 75%"));
+        assert!(output.contains("cpu: 50%"));
+    }
+
+    #[test]
+    fn test_toolbox_info_format_display_with_current_dir() {
+        let mut info = ToolboxInfo::new();
+        info.current_dir = Some("/home/user/project".to_string());
+
+        let output = info.format_display(false, true);
+        assert!(output.contains("/home/user/project"));
+    }
+
+    #[test]
+    fn test_toolbox_info_format_display_compact_dir() {
+        let mut info = ToolboxInfo::new();
+        info.current_dir = Some("/very/long/path/to/project".to_string());
+
+        let output = info.format_display(true, false);
+        assert!(output.contains("to/project"));
+    }
+
+    #[test]
+    fn test_toolbox_info_format_display_git_clean() {
+        let mut info = ToolboxInfo::new();
+        info.git = Some(GitInfo {
+            branch: "main".to_string(),
+            modified_count: Some(0),
+            staged_count: Some(0),
+            untracked_count: Some(0),
+            is_dirty: false,
+            ahead: None,
+            behind: None,
+        });
+
+        let output = info.format_display(false, true);
+        assert!(output.contains("main"));
+        // Clean repo should not show change count
+        assert!(!output.contains("+"));
+    }
+
+    #[test]
+    fn test_toolbox_info_format_display_git_ahead_behind() {
+        let mut info = ToolboxInfo::new();
+        info.git = Some(GitInfo {
+            branch: "feature".to_string(),
+            modified_count: Some(0),
+            staged_count: Some(0),
+            untracked_count: Some(0),
+            is_dirty: false,
+            ahead: Some(3),
+            behind: Some(1),
+        });
+
+        let output = info.format_display(false, true);
+        assert!(output.contains("feature"));
+        assert!(output.contains("\u{2191}3")); // ↑3
+        assert!(output.contains("\u{2193}1")); // ↓1
+    }
+
+    #[test]
+    fn test_toolbox_info_format_display_separator_between_sections() {
+        let mut info = ToolboxInfo::new();
+        info.current_dir = Some("/tmp".to_string());
+        info.tools.push(ToolInfo::available(
+            "Rust".to_string(),
+            "1.75.0".to_string(),
+        ));
+
+        let output = info.format_display(false, true);
+        assert!(output.contains("\u{2500}")); // ─ separator
+    }
+
+    // --- format_powerline tests ---
+
+    #[test]
+    fn test_toolbox_info_format_powerline_empty() {
+        let info = ToolboxInfo::new();
+        let output = info.format_powerline(false, true, false, true);
+        assert!(output.is_empty());
+    }
+
+    #[test]
+    fn test_toolbox_info_format_powerline_with_tools_no_color() {
+        let mut info = ToolboxInfo::new();
+        info.tools.push(
+            ToolInfo::available("Rust".to_string(), "1.75.0".to_string())
+                .with_icon(Some("\u{1f980}".to_string())),
+        );
+
+        let output = info.format_powerline(false, true, false, true);
+        assert!(output.contains("Rust"));
+        assert!(output.contains("1.75.0"));
+    }
+
+    #[test]
+    fn test_toolbox_info_format_powerline_with_color() {
+        let mut info = ToolboxInfo::new();
+        info.tools.push(ToolInfo::available(
+            "Rust".to_string(),
+            "1.75.0".to_string(),
+        ));
+
+        let output = info.format_powerline(false, false, true, true);
+        assert!(output.contains("\x1b[")); // ANSI codes
+        assert!(output.contains("Rust"));
+    }
+
+    #[test]
+    fn test_toolbox_info_format_powerline_multiline() {
+        let mut info = ToolboxInfo::new();
+        info.tools
+            .push(ToolInfo::available("A".to_string(), "1.0".to_string()));
+        info.tools
+            .push(ToolInfo::available("B".to_string(), "2.0".to_string()));
+
+        let output = info.format_powerline(false, false, true, false);
+        assert!(output.contains('\n'));
+    }
+
+    #[test]
+    fn test_toolbox_info_format_powerline_git_clean() {
+        let mut info = ToolboxInfo::new();
+        info.git = Some(GitInfo {
+            branch: "main".to_string(),
+            modified_count: Some(0),
+            staged_count: Some(0),
+            untracked_count: Some(0),
+            is_dirty: false,
+            ahead: None,
+            behind: None,
+        });
+
+        // Green segment for clean repo (no color for easy assertion)
+        let output = info.format_powerline(false, false, false, true);
+        assert!(output.contains("main"));
+    }
+
+    #[test]
+    fn test_toolbox_info_format_powerline_git_dirty() {
+        let mut info = ToolboxInfo::new();
+        info.git = Some(GitInfo {
+            branch: "dev".to_string(),
+            modified_count: Some(3),
+            staged_count: Some(0),
+            untracked_count: Some(0),
+            is_dirty: true,
+            ahead: None,
+            behind: None,
+        });
+
+        let output = info.format_powerline(false, false, false, true);
+        assert!(output.contains("dev"));
+        assert!(output.contains("+3"));
+    }
+
+    #[test]
+    fn test_toolbox_info_format_powerline_compact() {
+        let mut info = ToolboxInfo::new();
+        info.tools.push(
+            ToolInfo::available("Python".to_string(), "3.12.0".to_string())
+                .with_short_name(Some("py".to_string())),
+        );
+
+        let output = info.format_powerline(true, false, false, true);
+        assert!(output.contains("py"));
+        assert!(!output.contains("Python"));
+    }
+
+    #[test]
+    fn test_toolbox_info_format_powerline_virtual_env() {
+        let mut info = ToolboxInfo::new();
+        info.virtual_env = Some("myenv".to_string());
+
+        let output = info.format_powerline(false, false, false, true);
+        assert!(output.contains("venv: myenv"));
+    }
+
+    // --- ToolboxInfo JSON roundtrip ---
+
+    #[test]
+    fn test_toolbox_info_json_roundtrip() {
+        let mut info = ToolboxInfo::new();
+        info.current_dir = Some("/tmp".to_string());
+        info.tools.push(ToolInfo::available(
+            "Rust".to_string(),
+            "1.75.0".to_string(),
+        ));
+        info.git = Some(GitInfo {
+            branch: "main".to_string(),
+            modified_count: Some(0),
+            staged_count: Some(0),
+            untracked_count: Some(0),
+            is_dirty: false,
+            ahead: None,
+            behind: None,
+        });
+
+        let json = serde_json::to_string(&info).unwrap();
+        let parsed: ToolboxInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.current_dir, info.current_dir);
+        assert_eq!(parsed.tools.len(), 1);
+        assert!(parsed.git.is_some());
+    }
+
+    // --- SystemInfo JSON roundtrip ---
+
+    #[test]
+    fn test_system_info_json_roundtrip() {
+        let sys = SystemInfo {
+            memory_percent: Some(65.5),
+            memory_total_gb: Some(16.0),
+            memory_used_gb: Some(10.48),
+            cpu_percent: Some(42.0),
+        };
+        let json = serde_json::to_string(&sys).unwrap();
+        let parsed: SystemInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.memory_percent, sys.memory_percent);
+        assert_eq!(parsed.cpu_percent, sys.cpu_percent);
+    }
+
+    // --- Multiple available and unavailable tools ---
+
+    #[test]
+    fn test_format_display_mixed_tools() {
+        let mut info = ToolboxInfo::new();
+        info.tools.push(ToolInfo::available(
+            "Rust".to_string(),
+            "1.75.0".to_string(),
+        ));
+        info.tools.push(ToolInfo::unavailable(
+            "Ruby".to_string(),
+            Some("not found".to_string()),
+        ));
+        info.tools
+            .push(ToolInfo::available("Go".to_string(), "1.21.0".to_string()));
+
+        let output = info.format_display(false, false);
+        assert!(output.contains("Rust"));
+        assert!(output.contains("Go"));
+        assert!(!output.contains("Ruby")); // Unavailable hidden
+    }
 }
