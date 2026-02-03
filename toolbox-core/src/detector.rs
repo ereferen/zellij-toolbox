@@ -2,7 +2,9 @@
 
 use crate::config::{Config, ToolConfig};
 use crate::error::{Result, ToolboxError};
-use crate::info::{GitInfo, SystemInfo, ToolInfo, ToolboxInfo};
+use crate::info::{
+    DiagnosticStatus, DiagnosticSummary, GitInfo, SystemInfo, ToolDiagnostic, ToolInfo, ToolboxInfo,
+};
 use regex::Regex;
 use std::path::Path;
 use std::process::Command;
@@ -336,6 +338,162 @@ impl ToolDetector {
     pub fn config(&self) -> &Config {
         &self.config
     }
+
+    /// Run diagnostics on a single tool, returning detailed results
+    pub fn diagnose_tool(&self, tool_config: &ToolConfig) -> ToolDiagnostic {
+        let cmd_name = tool_config.command.split_whitespace().next().unwrap_or("");
+
+        // Try to find the command in PATH
+        let command_path = Self::which_command(cmd_name);
+
+        // Try to run the version command
+        match self.run_version_command(&tool_config.command) {
+            Ok(output) => {
+                if let Some(ref regex_str) = tool_config.parse_regex {
+                    match self.parse_version(&output, regex_str) {
+                        Some(version) => ToolDiagnostic {
+                            name: tool_config.name.clone(),
+                            icon: tool_config.icon.clone(),
+                            status: DiagnosticStatus::Ok,
+                            command: tool_config.command.clone(),
+                            command_path,
+                            version: Some(version),
+                            error_detail: None,
+                            suggestion: None,
+                            enabled: tool_config.enabled,
+                        },
+                        None => {
+                            // Command ran but regex didn't match
+                            let raw_output = output.trim().to_string();
+                            ToolDiagnostic {
+                                name: tool_config.name.clone(),
+                                icon: tool_config.icon.clone(),
+                                status: DiagnosticStatus::Warning,
+                                command: tool_config.command.clone(),
+                                command_path,
+                                version: Some(raw_output.clone()),
+                                error_detail: Some(format!(
+                                    "version parse: regex '{}' did not match output '{}'",
+                                    regex_str,
+                                    truncate_string(&raw_output, 80)
+                                )),
+                                suggestion: Some(
+                                    "Check parse_regex in config matches the command output"
+                                        .to_string(),
+                                ),
+                                enabled: tool_config.enabled,
+                            }
+                        }
+                    }
+                } else {
+                    // No regex, use raw output
+                    ToolDiagnostic {
+                        name: tool_config.name.clone(),
+                        icon: tool_config.icon.clone(),
+                        status: DiagnosticStatus::Ok,
+                        command: tool_config.command.clone(),
+                        command_path,
+                        version: Some(output.trim().to_string()),
+                        error_detail: None,
+                        suggestion: None,
+                        enabled: tool_config.enabled,
+                    }
+                }
+            }
+            Err(e) => {
+                let error_str = e.to_string();
+                let (error_detail, suggestion) = if error_str.contains("No such file or directory")
+                    || error_str.contains("not found")
+                {
+                    (
+                        format!("command not found: '{}'", cmd_name),
+                        Some(format!(
+                            "Install {} or add it to your PATH",
+                            tool_config.name
+                        )),
+                    )
+                } else {
+                    (error_str, None)
+                };
+
+                ToolDiagnostic {
+                    name: tool_config.name.clone(),
+                    icon: tool_config.icon.clone(),
+                    status: DiagnosticStatus::Error,
+                    command: tool_config.command.clone(),
+                    command_path: None,
+                    version: None,
+                    error_detail: Some(error_detail),
+                    suggestion,
+                    enabled: tool_config.enabled,
+                }
+            }
+        }
+    }
+
+    /// Run diagnostics on all configured tools (both enabled and disabled)
+    pub fn diagnose_all(&self) -> DiagnosticSummary {
+        let all_tools = self.config.effective_tools();
+
+        let config_path = Config::config_path().map(|p| p.display().to_string());
+        let config_exists = config_path
+            .as_ref()
+            .map(|p| std::path::Path::new(p).exists())
+            .unwrap_or(false);
+
+        let diagnostics: Vec<ToolDiagnostic> =
+            all_tools.iter().map(|t| self.diagnose_tool(t)).collect();
+
+        let ok_count = diagnostics
+            .iter()
+            .filter(|d| d.status == DiagnosticStatus::Ok)
+            .count();
+        let warning_count = diagnostics
+            .iter()
+            .filter(|d| d.status == DiagnosticStatus::Warning)
+            .count();
+        let error_count = diagnostics
+            .iter()
+            .filter(|d| d.status == DiagnosticStatus::Error)
+            .count();
+
+        DiagnosticSummary {
+            config_path,
+            config_exists,
+            total: diagnostics.len(),
+            ok_count,
+            warning_count,
+            error_count,
+            tools: diagnostics,
+        }
+    }
+
+    /// Look up the full path of a command using `which`
+    fn which_command(cmd: &str) -> Option<String> {
+        if cmd.is_empty() {
+            return None;
+        }
+        Command::new("which")
+            .arg(cmd)
+            .output()
+            .ok()
+            .and_then(|output| {
+                if output.status.success() {
+                    Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+                } else {
+                    None
+                }
+            })
+    }
+}
+
+/// Truncate a string to a maximum length, appending "..." if truncated
+fn truncate_string(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max_len])
+    }
 }
 
 #[cfg(test)]
@@ -603,5 +761,189 @@ mod tests {
 
         // Should return ToolboxInfo even with no tools
         assert!(info.tools.is_empty());
+    }
+
+    // --- diagnose_tool tests ---
+
+    #[test]
+    fn test_diagnose_tool_available_with_regex() {
+        let detector = test_detector();
+        let tool_config = ToolConfig {
+            name: "Echo".to_string(),
+            command: "echo v1.2.3".to_string(),
+            parse_regex: Some(r"v?(\d+\.\d+\.\d+)".to_string()),
+            icon: Some("T".to_string()),
+            enabled: true,
+            short_name: None,
+        };
+
+        let diag = detector.diagnose_tool(&tool_config);
+        assert_eq!(diag.status, DiagnosticStatus::Ok);
+        assert_eq!(diag.version, Some("1.2.3".to_string()));
+        assert!(diag.command_path.is_some()); // echo should be found in PATH
+        assert!(diag.error_detail.is_none());
+        assert!(diag.suggestion.is_none());
+        assert!(diag.enabled);
+    }
+
+    #[test]
+    fn test_diagnose_tool_available_no_regex() {
+        let detector = test_detector();
+        let tool_config = ToolConfig {
+            name: "Raw".to_string(),
+            command: "echo hello world".to_string(),
+            parse_regex: None,
+            icon: None,
+            enabled: true,
+            short_name: None,
+        };
+
+        let diag = detector.diagnose_tool(&tool_config);
+        assert_eq!(diag.status, DiagnosticStatus::Ok);
+        assert_eq!(diag.version, Some("hello world".to_string()));
+    }
+
+    #[test]
+    fn test_diagnose_tool_unavailable() {
+        let detector = test_detector();
+        let tool_config = ToolConfig {
+            name: "NonExistent".to_string(),
+            command: "nonexistent_cmd_xyz --version".to_string(),
+            parse_regex: None,
+            icon: Some("?".to_string()),
+            enabled: false,
+            short_name: None,
+        };
+
+        let diag = detector.diagnose_tool(&tool_config);
+        assert_eq!(diag.status, DiagnosticStatus::Error);
+        assert!(diag.version.is_none());
+        assert!(diag.command_path.is_none());
+        assert!(diag.error_detail.is_some());
+        assert!(diag.suggestion.is_some());
+        assert!(!diag.enabled);
+    }
+
+    #[test]
+    fn test_diagnose_tool_regex_mismatch() {
+        let detector = test_detector();
+        let tool_config = ToolConfig {
+            name: "Mismatch".to_string(),
+            command: "echo some random output".to_string(),
+            parse_regex: Some(r"Python\s+(\d+\.\d+)".to_string()),
+            icon: None,
+            enabled: true,
+            short_name: None,
+        };
+
+        let diag = detector.diagnose_tool(&tool_config);
+        assert_eq!(diag.status, DiagnosticStatus::Warning);
+        assert!(diag.version.is_some()); // raw output is used
+        assert!(diag.error_detail.is_some());
+        assert!(diag
+            .error_detail
+            .as_ref()
+            .unwrap()
+            .contains("did not match"));
+        assert!(diag.suggestion.is_some());
+    }
+
+    // --- diagnose_all tests ---
+
+    #[test]
+    fn test_diagnose_all_empty_config() {
+        let config = Config {
+            use_default_tools: false,
+            ..Config::default()
+        };
+        let detector = ToolDetector::new(config);
+        let summary = detector.diagnose_all();
+
+        assert_eq!(summary.total, 0);
+        assert_eq!(summary.ok_count, 0);
+        assert_eq!(summary.warning_count, 0);
+        assert_eq!(summary.error_count, 0);
+        assert!(summary.tools.is_empty());
+    }
+
+    #[test]
+    fn test_diagnose_all_with_mixed_tools() {
+        let mut config = Config {
+            use_default_tools: false,
+            ..Config::default()
+        };
+        config.custom_tools.push(ToolConfig {
+            name: "GoodTool".to_string(),
+            command: "echo v2.0.0".to_string(),
+            parse_regex: Some(r"v(\d+\.\d+\.\d+)".to_string()),
+            icon: None,
+            enabled: true,
+            short_name: None,
+        });
+        config.custom_tools.push(ToolConfig {
+            name: "BadTool".to_string(),
+            command: "nonexistent_cmd_12345 --version".to_string(),
+            parse_regex: None,
+            icon: None,
+            enabled: true,
+            short_name: None,
+        });
+
+        let detector = ToolDetector::new(config);
+        let summary = detector.diagnose_all();
+
+        assert_eq!(summary.total, 2);
+        assert_eq!(summary.ok_count, 1);
+        assert_eq!(summary.error_count, 1);
+    }
+
+    #[test]
+    fn test_diagnose_all_has_config_info() {
+        let config = Config {
+            use_default_tools: false,
+            ..Config::default()
+        };
+        let detector = ToolDetector::new(config);
+        let summary = detector.diagnose_all();
+
+        // config_path should be available (may or may not exist)
+        assert!(summary.config_path.is_some());
+    }
+
+    // --- truncate_string tests ---
+
+    #[test]
+    fn test_truncate_string_short() {
+        assert_eq!(truncate_string("hello", 10), "hello");
+    }
+
+    #[test]
+    fn test_truncate_string_exact() {
+        assert_eq!(truncate_string("hello", 5), "hello");
+    }
+
+    #[test]
+    fn test_truncate_string_long() {
+        assert_eq!(truncate_string("hello world", 5), "hello...");
+    }
+
+    // --- which_command tests ---
+
+    #[test]
+    fn test_which_command_found() {
+        let path = ToolDetector::which_command("echo");
+        assert!(path.is_some());
+    }
+
+    #[test]
+    fn test_which_command_not_found() {
+        let path = ToolDetector::which_command("nonexistent_cmd_xyz_12345");
+        assert!(path.is_none());
+    }
+
+    #[test]
+    fn test_which_command_empty() {
+        let path = ToolDetector::which_command("");
+        assert!(path.is_none());
     }
 }

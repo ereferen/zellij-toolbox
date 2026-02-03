@@ -84,6 +84,12 @@ toolbox show-config
 
 # 利用可能なツール一覧
 toolbox list-tools
+
+# ツール検出環境の診断
+toolbox doctor
+
+# 診断結果をJSON出力
+toolbox doctor --json
 ```
 
 ## アーキテクチャ
@@ -91,8 +97,9 @@ toolbox list-tools
 ### toolbox-core
 
 - `Config`: TOML設定ファイルの読み書き（24ツールのデフォルト定義、カスタムツール追加、オーバーライド対応）
-- `ToolDetector`: ツールバージョン検出のメインロジック（asdf/mise対応、Git ahead/behind追跡）
+- `ToolDetector`: ツールバージョン検出のメインロジック（asdf/mise対応、Git ahead/behind追跡、診断機能）
 - `ToolInfo`, `GitInfo`, `SystemInfo`: 情報を格納する構造体
+- `ToolDiagnostic`, `DiagnosticSummary`: ツール診断結果を格納する構造体
 - Powerlineスタイルの表示フォーマット（シングルライン・マルチライン）
 - ANSIカラー出力（auto/always/never切替）
 
@@ -110,6 +117,7 @@ CLIインターフェース。clap使用。
 - `init`: 設定ファイル生成
 - `show-config`: 現在の設定を表示
 - `list-tools`: 利用可能なツール一覧
+- `doctor`: ツール検出環境の診断（`--json` でJSON出力対応）
 
 オプション:
 - `-c, --config`: 設定ファイルパス
@@ -143,6 +151,7 @@ ZellijのWASMプラグイン。CLIを呼び出して結果を表示する。
 - [x] 24ツールのデフォルト定義
 - [x] 仮想環境検出（Python venv, Conda）
 - [x] DevContainer設定
+- [x] `toolbox doctor` 診断サブコマンド（ツール検出環境の診断、JSON出力対応）
 
 ## テストルール（必須）
 

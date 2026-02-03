@@ -286,3 +286,127 @@ fn test_color_always() {
 fn test_color_never() {
     toolbox_cmd().args(["--color", "never"]).assert().success();
 }
+
+// --- Doctor subcommand ---
+
+#[test]
+fn test_doctor_subcommand_succeeds() {
+    toolbox_cmd()
+        .arg("doctor")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Toolbox Doctor"))
+        .stdout(predicate::str::contains("Tool Status:"))
+        .stdout(predicate::str::contains("tools checked"));
+}
+
+#[test]
+fn test_doctor_shows_config_info() {
+    toolbox_cmd()
+        .arg("doctor")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Config:"));
+}
+
+#[test]
+fn test_doctor_json_output_is_valid() {
+    let output = toolbox_cmd()
+        .args(["doctor", "--json"])
+        .output()
+        .expect("failed to execute");
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: Result<serde_json::Value, _> = serde_json::from_str(stdout.trim());
+    assert!(
+        parsed.is_ok(),
+        "Doctor JSON output is not valid: {}",
+        stdout
+    );
+
+    let value = parsed.unwrap();
+    assert!(value.get("total").is_some());
+    assert!(value.get("ok_count").is_some());
+    assert!(value.get("tools").is_some());
+}
+
+#[test]
+fn test_doctor_json_has_tool_details() {
+    let output = toolbox_cmd()
+        .args(["doctor", "--json"])
+        .output()
+        .expect("failed to execute");
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap();
+    let tools = parsed["tools"].as_array().unwrap();
+
+    // With default config, there should be tools
+    assert!(!tools.is_empty());
+
+    // Each tool should have required fields
+    for tool in tools {
+        assert!(tool.get("name").is_some());
+        assert!(tool.get("status").is_some());
+        assert!(tool.get("command").is_some());
+        assert!(tool.get("enabled").is_some());
+    }
+}
+
+#[test]
+fn test_doctor_with_custom_config() {
+    let mut temp_file = NamedTempFile::new().unwrap();
+    writeln!(
+        temp_file,
+        r#"
+use_default_tools = false
+
+[[custom_tools]]
+name = "Echo"
+command = "echo v1.0.0"
+parse_regex = 'v?(\d+\.\d+\.\d+)'
+enabled = true
+"#
+    )
+    .unwrap();
+
+    let path = temp_file.path().to_path_buf();
+
+    toolbox_cmd()
+        .args(["--config", path.to_str().unwrap(), "doctor"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Echo"))
+        .stdout(predicate::str::contains("1 tools checked: 1 ok"));
+}
+
+#[test]
+fn test_doctor_shows_unavailable_tools() {
+    let mut temp_file = NamedTempFile::new().unwrap();
+    writeln!(
+        temp_file,
+        r#"
+use_default_tools = false
+
+[[custom_tools]]
+name = "FakeTool"
+command = "nonexistent_fakecmd_12345 --version"
+enabled = true
+"#
+    )
+    .unwrap();
+
+    let path = temp_file.path().to_path_buf();
+
+    toolbox_cmd()
+        .args(["--config", path.to_str().unwrap(), "doctor"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("ERR"))
+        .stdout(predicate::str::contains("FakeTool"))
+        .stdout(predicate::str::contains(
+            "1 tools checked: 0 ok, 0 warning, 1 error",
+        ));
+}

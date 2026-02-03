@@ -16,4 +16,6 @@ pub mod info;
 pub use config::Config;
 pub use detector::ToolDetector;
 pub use error::ToolboxError;
-pub use info::{GitInfo, SystemInfo, ToolInfo, ToolboxInfo};
+pub use info::{
+    DiagnosticStatus, DiagnosticSummary, GitInfo, SystemInfo, ToolDiagnostic, ToolInfo, ToolboxInfo,
+};
