@@ -65,6 +65,12 @@ enum Commands {
     ShowConfig,
     /// List available tools
     ListTools,
+    /// Diagnose tool detection environment
+    Doctor {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn main() -> Result<()> {
@@ -168,6 +174,27 @@ fn handle_command(command: &Commands, cli: &Cli) -> Result<()> {
             println!("\nEdit your config file to enable/disable tools or add custom ones.");
             if let Some(path) = Config::config_path() {
                 println!("Config path: {}", path.display());
+            }
+        }
+
+        Commands::Doctor { json } => {
+            let config = if let Some(ref config_path) = cli.config {
+                Config::load_from_path(config_path)?
+            } else {
+                Config::load()?
+            };
+
+            let mut detector = ToolDetector::new(config);
+            if let Some(ref dir) = cli.dir {
+                detector = detector.with_working_dir(dir.clone());
+            }
+
+            let summary = detector.diagnose_all();
+
+            if *json {
+                println!("{}", serde_json::to_string_pretty(&summary)?);
+            } else {
+                println!("{}", summary.format_display());
             }
         }
     }

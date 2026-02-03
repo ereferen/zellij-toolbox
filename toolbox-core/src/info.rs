@@ -146,6 +146,156 @@ impl GitInfo {
     }
 }
 
+/// Status of a tool diagnostic check
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DiagnosticStatus {
+    /// Tool found and version parsed successfully
+    Ok,
+    /// Tool found but version parse had issues
+    Warning,
+    /// Tool not found or command execution failed
+    Error,
+}
+
+/// Diagnostic result for a single tool
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolDiagnostic {
+    /// Tool name
+    pub name: String,
+    /// Icon/emoji
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    /// Diagnostic status
+    pub status: DiagnosticStatus,
+    /// The command that was checked
+    pub command: String,
+    /// Resolved path of the command binary (from which)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command_path: Option<String>,
+    /// Detected version (if successful)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    /// Detailed error message
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_detail: Option<String>,
+    /// Suggestion for fixing the issue
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub suggestion: Option<String>,
+    /// Whether the tool is enabled in config
+    pub enabled: bool,
+}
+
+impl ToolDiagnostic {
+    /// Format a single diagnostic line for display
+    pub fn format_display(&self) -> String {
+        let status_icon = match self.status {
+            DiagnosticStatus::Ok => "OK",
+            DiagnosticStatus::Warning => "WARN",
+            DiagnosticStatus::Error => "ERR",
+        };
+
+        let icon = self.icon.as_deref().unwrap_or(" ");
+        let enabled_tag = if self.enabled { "" } else { " (disabled)" };
+
+        let mut line = match &self.status {
+            DiagnosticStatus::Ok => {
+                let version = self.version.as_deref().unwrap_or("?");
+                let path = self
+                    .command_path
+                    .as_deref()
+                    .map(|p| format!(" ({})", p))
+                    .unwrap_or_default();
+                format!(
+                    " {} {} {}{}{} {}",
+                    status_icon, icon, self.name, enabled_tag, path, version
+                )
+            }
+            DiagnosticStatus::Warning => {
+                let version = self.version.as_deref().unwrap_or("?");
+                let path = self
+                    .command_path
+                    .as_deref()
+                    .map(|p| format!(" ({})", p))
+                    .unwrap_or_default();
+                format!(
+                    " {} {} {}{}{} {}",
+                    status_icon, icon, self.name, enabled_tag, path, version
+                )
+            }
+            DiagnosticStatus::Error => {
+                let detail = self.error_detail.as_deref().unwrap_or("unknown error");
+                format!(
+                    " {} {} {}{} - {}",
+                    status_icon, icon, self.name, enabled_tag, detail
+                )
+            }
+        };
+
+        if let Some(ref suggestion) = self.suggestion {
+            line.push_str(&format!("\n      -> {}", suggestion));
+        }
+
+        line
+    }
+}
+
+/// Summary of diagnostic results
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiagnosticSummary {
+    /// Config file path (if found)
+    pub config_path: Option<String>,
+    /// Whether config file exists
+    pub config_exists: bool,
+    /// Total tools checked
+    pub total: usize,
+    /// Tools with Ok status
+    pub ok_count: usize,
+    /// Tools with Warning status
+    pub warning_count: usize,
+    /// Tools with Error status
+    pub error_count: usize,
+    /// Individual tool diagnostics
+    pub tools: Vec<ToolDiagnostic>,
+}
+
+impl DiagnosticSummary {
+    /// Format the full diagnostic report
+    pub fn format_display(&self) -> String {
+        let mut lines = Vec::new();
+
+        lines.push("Toolbox Doctor".to_string());
+        lines.push("=".repeat(40));
+
+        // Config info
+        if let Some(ref path) = self.config_path {
+            if self.config_exists {
+                lines.push(format!(" Config: {}", path));
+            } else {
+                lines.push(format!(" Config: {} (not found, using defaults)", path));
+            }
+        } else {
+            lines.push(" Config: (no config path available)".to_string());
+        }
+
+        lines.push(String::new());
+        lines.push("Tool Status:".to_string());
+        lines.push("-".repeat(40));
+
+        for diag in &self.tools {
+            lines.push(diag.format_display());
+        }
+
+        lines.push(String::new());
+        lines.push("-".repeat(40));
+        lines.push(format!(
+            " {} tools checked: {} ok, {} warning, {} error",
+            self.total, self.ok_count, self.warning_count, self.error_count
+        ));
+
+        lines.join("\n")
+    }
+}
+
 /// System resource information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemInfo {
@@ -995,5 +1145,203 @@ mod tests {
         assert!(output.contains("Rust"));
         assert!(output.contains("Go"));
         assert!(!output.contains("Ruby")); // Unavailable hidden
+    }
+
+    // --- DiagnosticStatus tests ---
+
+    #[test]
+    fn test_diagnostic_status_equality() {
+        assert_eq!(DiagnosticStatus::Ok, DiagnosticStatus::Ok);
+        assert_eq!(DiagnosticStatus::Warning, DiagnosticStatus::Warning);
+        assert_eq!(DiagnosticStatus::Error, DiagnosticStatus::Error);
+        assert_ne!(DiagnosticStatus::Ok, DiagnosticStatus::Error);
+    }
+
+    // --- ToolDiagnostic format_display tests ---
+
+    #[test]
+    fn test_diagnostic_format_ok() {
+        let diag = ToolDiagnostic {
+            name: "Rust".to_string(),
+            icon: Some("R".to_string()),
+            status: DiagnosticStatus::Ok,
+            command: "rustc --version".to_string(),
+            command_path: Some("/usr/bin/rustc".to_string()),
+            version: Some("1.75.0".to_string()),
+            error_detail: None,
+            suggestion: None,
+            enabled: true,
+        };
+
+        let output = diag.format_display();
+        assert!(output.contains("OK"));
+        assert!(output.contains("Rust"));
+        assert!(output.contains("1.75.0"));
+        assert!(output.contains("/usr/bin/rustc"));
+        assert!(!output.contains("disabled"));
+    }
+
+    #[test]
+    fn test_diagnostic_format_ok_disabled() {
+        let diag = ToolDiagnostic {
+            name: "Ruby".to_string(),
+            icon: None,
+            status: DiagnosticStatus::Ok,
+            command: "ruby --version".to_string(),
+            command_path: Some("/usr/bin/ruby".to_string()),
+            version: Some("3.2.0".to_string()),
+            error_detail: None,
+            suggestion: None,
+            enabled: false,
+        };
+
+        let output = diag.format_display();
+        assert!(output.contains("(disabled)"));
+    }
+
+    #[test]
+    fn test_diagnostic_format_warning() {
+        let diag = ToolDiagnostic {
+            name: "Java".to_string(),
+            icon: Some("J".to_string()),
+            status: DiagnosticStatus::Warning,
+            command: "java --version".to_string(),
+            command_path: Some("/usr/bin/java".to_string()),
+            version: Some("java 21.0.1 2023-10-17".to_string()),
+            error_detail: Some("regex did not match".to_string()),
+            suggestion: Some("Check parse_regex".to_string()),
+            enabled: true,
+        };
+
+        let output = diag.format_display();
+        assert!(output.contains("WARN"));
+        assert!(output.contains("Java"));
+        assert!(output.contains("-> Check parse_regex"));
+    }
+
+    #[test]
+    fn test_diagnostic_format_error() {
+        let diag = ToolDiagnostic {
+            name: "Docker".to_string(),
+            icon: Some("D".to_string()),
+            status: DiagnosticStatus::Error,
+            command: "docker --version".to_string(),
+            command_path: None,
+            version: None,
+            error_detail: Some("command not found: 'docker'".to_string()),
+            suggestion: Some("Install Docker or add it to your PATH".to_string()),
+            enabled: true,
+        };
+
+        let output = diag.format_display();
+        assert!(output.contains("ERR"));
+        assert!(output.contains("Docker"));
+        assert!(output.contains("command not found"));
+        assert!(output.contains("-> Install Docker"));
+    }
+
+    // --- DiagnosticSummary format_display tests ---
+
+    #[test]
+    fn test_diagnostic_summary_format_empty() {
+        let summary = DiagnosticSummary {
+            config_path: Some("/home/user/.config/toolbox/config.toml".to_string()),
+            config_exists: false,
+            total: 0,
+            ok_count: 0,
+            warning_count: 0,
+            error_count: 0,
+            tools: vec![],
+        };
+
+        let output = summary.format_display();
+        assert!(output.contains("Toolbox Doctor"));
+        assert!(output.contains("not found, using defaults"));
+        assert!(output.contains("0 tools checked"));
+    }
+
+    #[test]
+    fn test_diagnostic_summary_format_with_tools() {
+        let summary = DiagnosticSummary {
+            config_path: Some("/home/user/.config/toolbox/config.toml".to_string()),
+            config_exists: true,
+            total: 3,
+            ok_count: 2,
+            warning_count: 0,
+            error_count: 1,
+            tools: vec![
+                ToolDiagnostic {
+                    name: "Rust".to_string(),
+                    icon: None,
+                    status: DiagnosticStatus::Ok,
+                    command: "rustc --version".to_string(),
+                    command_path: Some("/usr/bin/rustc".to_string()),
+                    version: Some("1.75.0".to_string()),
+                    error_detail: None,
+                    suggestion: None,
+                    enabled: true,
+                },
+                ToolDiagnostic {
+                    name: "Python".to_string(),
+                    icon: None,
+                    status: DiagnosticStatus::Ok,
+                    command: "python3 --version".to_string(),
+                    command_path: Some("/usr/bin/python3".to_string()),
+                    version: Some("3.12.0".to_string()),
+                    error_detail: None,
+                    suggestion: None,
+                    enabled: true,
+                },
+                ToolDiagnostic {
+                    name: "Docker".to_string(),
+                    icon: None,
+                    status: DiagnosticStatus::Error,
+                    command: "docker --version".to_string(),
+                    command_path: None,
+                    version: None,
+                    error_detail: Some("not found".to_string()),
+                    suggestion: None,
+                    enabled: true,
+                },
+            ],
+        };
+
+        let output = summary.format_display();
+        assert!(output.contains("Toolbox Doctor"));
+        assert!(output.contains("Config:"));
+        assert!(!output.contains("not found, using defaults"));
+        assert!(output.contains("3 tools checked: 2 ok, 0 warning, 1 error"));
+    }
+
+    // --- DiagnosticSummary JSON roundtrip ---
+
+    #[test]
+    fn test_diagnostic_summary_json_roundtrip() {
+        let summary = DiagnosticSummary {
+            config_path: Some("/tmp/config.toml".to_string()),
+            config_exists: true,
+            total: 1,
+            ok_count: 1,
+            warning_count: 0,
+            error_count: 0,
+            tools: vec![ToolDiagnostic {
+                name: "Echo".to_string(),
+                icon: None,
+                status: DiagnosticStatus::Ok,
+                command: "echo test".to_string(),
+                command_path: Some("/bin/echo".to_string()),
+                version: Some("test".to_string()),
+                error_detail: None,
+                suggestion: None,
+                enabled: true,
+            }],
+        };
+
+        let json = serde_json::to_string(&summary).unwrap();
+        let parsed: DiagnosticSummary = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.total, 1);
+        assert_eq!(parsed.ok_count, 1);
+        assert_eq!(parsed.tools.len(), 1);
+        assert_eq!(parsed.tools[0].status, DiagnosticStatus::Ok);
     }
 }

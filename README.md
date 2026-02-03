@@ -12,6 +12,7 @@ A Zellij plugin for displaying development tool versions at a glance.
 - Powerline-style colored output (single-line and multiline)
 - Virtual environment detection (Python venv, Conda)
 - CLI tool for standalone usage
+- `toolbox doctor` diagnostic command for troubleshooting tool detection
 - Zellij WASM plugin with auto-refresh
 
 ## Installation
@@ -82,6 +83,12 @@ toolbox show-config
 
 # List available tools
 toolbox list-tools
+
+# Diagnose tool detection (check what's found, what's missing)
+toolbox doctor
+
+# Diagnose with JSON output
+toolbox doctor --json
 ```
 
 ### Zellij Plugin
@@ -195,7 +202,7 @@ cargo build -p toolbox-zellij --target wasm32-wasip1 --release
 ### Test
 
 ```bash
-# Run all tests (69 unit tests)
+# Run all tests
 cargo test
 
 # Run specific crate tests
