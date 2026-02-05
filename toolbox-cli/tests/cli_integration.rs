@@ -410,3 +410,138 @@ enabled = true
             "1 tools checked: 0 ok, 0 warning, 1 error",
         ));
 }
+
+// --- Cache options ---
+
+#[test]
+fn test_no_cache_flag_succeeds() {
+    toolbox_cmd().arg("--no-cache").assert().success();
+}
+
+#[test]
+fn test_refresh_flag_succeeds() {
+    toolbox_cmd().arg("--refresh").assert().success();
+}
+
+#[test]
+fn test_no_cache_with_json_output() {
+    let output = toolbox_cmd()
+        .args(["--no-cache", "--format", "json"])
+        .output()
+        .expect("failed to execute");
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: Result<serde_json::Value, _> = serde_json::from_str(stdout.trim());
+    assert!(parsed.is_ok(), "Output is not valid JSON: {}", stdout);
+}
+
+#[test]
+fn test_refresh_with_json_output() {
+    let output = toolbox_cmd()
+        .args(["--refresh", "--format", "json"])
+        .output()
+        .expect("failed to execute");
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: Result<serde_json::Value, _> = serde_json::from_str(stdout.trim());
+    assert!(parsed.is_ok(), "Output is not valid JSON: {}", stdout);
+}
+
+#[test]
+fn test_no_cache_and_refresh_combined() {
+    // --no-cache takes priority: cache is disabled, --refresh is a no-op
+    toolbox_cmd()
+        .args(["--no-cache", "--refresh"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_cache_disabled_in_config() {
+    let mut temp_file = NamedTempFile::new().unwrap();
+    writeln!(
+        temp_file,
+        r#"
+use_default_tools = false
+
+[cache]
+enabled = false
+
+[[custom_tools]]
+name = "Echo"
+command = "echo v1.0.0"
+parse_regex = 'v?(\d+\.\d+\.\d+)'
+enabled = true
+
+[extras]
+git_branch = false
+git_status = false
+current_directory = false
+virtual_env = false
+system_memory = false
+system_cpu = false
+"#
+    )
+    .unwrap();
+
+    let path = temp_file.path().to_path_buf();
+
+    let output = toolbox_cmd()
+        .args(["--config", path.to_str().unwrap(), "--format", "json"])
+        .output()
+        .expect("failed to execute");
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap();
+    let tools = parsed["tools"].as_array().unwrap();
+    assert_eq!(tools.len(), 1);
+    assert_eq!(tools[0]["name"], "Echo");
+    assert_eq!(tools[0]["version"], "1.0.0");
+}
+
+#[test]
+fn test_cache_custom_ttl_in_config() {
+    let mut temp_file = NamedTempFile::new().unwrap();
+    writeln!(
+        temp_file,
+        r#"
+use_default_tools = false
+
+[cache]
+enabled = true
+default_ttl = 60
+
+[[custom_tools]]
+name = "Echo"
+command = "echo v2.0.0"
+parse_regex = 'v?(\d+\.\d+\.\d+)'
+enabled = true
+
+[extras]
+git_branch = false
+git_status = false
+current_directory = false
+virtual_env = false
+system_memory = false
+system_cpu = false
+"#
+    )
+    .unwrap();
+
+    let path = temp_file.path().to_path_buf();
+
+    let output = toolbox_cmd()
+        .args(["--config", path.to_str().unwrap(), "--format", "json"])
+        .output()
+        .expect("failed to execute");
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap();
+    let tools = parsed["tools"].as_array().unwrap();
+    assert_eq!(tools.len(), 1);
+    assert_eq!(tools[0]["version"], "2.0.0");
+}

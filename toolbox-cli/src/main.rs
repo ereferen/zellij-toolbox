@@ -42,6 +42,14 @@ struct Cli {
     #[arg(long, default_value = "auto")]
     color: String,
 
+    /// Disable version detection cache
+    #[arg(long)]
+    no_cache: bool,
+
+    /// Force refresh all cached versions
+    #[arg(long)]
+    refresh: bool,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -92,6 +100,12 @@ fn main() -> Result<()> {
     let mut detector = ToolDetector::new(config);
     if let Some(ref dir) = cli.dir {
         detector = detector.with_working_dir(dir.clone());
+    }
+    if cli.no_cache {
+        detector = detector.with_cache_disabled();
+    }
+    if cli.refresh {
+        detector = detector.with_cache_refresh();
     }
 
     // Detect all tools
