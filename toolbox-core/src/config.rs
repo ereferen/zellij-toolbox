@@ -21,6 +21,8 @@ pub struct Config {
     pub tool_overrides: Vec<ToolOverride>,
     /// Extra information settings
     pub extras: ExtrasConfig,
+    /// Cache settings for version detection
+    pub cache: CacheConfig,
     /// Whether to use default tools as base (default: true)
     /// If false, only custom_tools will be used
     #[serde(default = "default_true")]
@@ -51,6 +53,7 @@ impl Default for Config {
             custom_tools: Vec::new(),
             tool_overrides: Vec::new(),
             extras: ExtrasConfig::default(),
+            cache: CacheConfig::default(),
             use_default_tools: true,
         }
     }
@@ -129,6 +132,25 @@ impl Default for ExtrasConfig {
             current_directory: true,
             virtual_env: true,
             shell: false,
+        }
+    }
+}
+
+/// Cache settings for version detection results
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CacheConfig {
+    /// Whether caching is enabled (default: true)
+    pub enabled: bool,
+    /// Default TTL in seconds for cache entries (default: 300 = 5 minutes)
+    pub default_ttl: u64,
+}
+
+impl Default for CacheConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            default_ttl: 300,
         }
     }
 }

@@ -7,12 +7,14 @@
 //! - Git repository information
 //! - System resource information
 
+pub mod cache;
 pub mod color;
 pub mod config;
 pub mod detector;
 pub mod error;
 pub mod info;
 
+pub use cache::VersionCache;
 pub use config::Config;
 pub use detector::ToolDetector;
 pub use error::ToolboxError;

@@ -1,5 +1,6 @@
 //! Tool version detection
 
+use crate::cache::VersionCache;
 use crate::config::{Config, ToolConfig};
 use crate::error::{Result, ToolboxError};
 use crate::info::{
@@ -14,14 +15,22 @@ pub struct ToolDetector {
     config: Config,
     /// Working directory for command execution
     working_dir: Option<String>,
+    /// Version cache for avoiding redundant detections
+    cache: Option<VersionCache>,
 }
 
 impl ToolDetector {
     /// Create a new detector with the given configuration
     pub fn new(config: Config) -> Self {
+        let cache = if config.cache.enabled {
+            Some(VersionCache::new(config.cache.default_ttl))
+        } else {
+            None
+        };
         Self {
             config,
             working_dir: None,
+            cache,
         }
     }
 
@@ -37,8 +46,27 @@ impl ToolDetector {
         self
     }
 
+    /// Disable the cache (equivalent to --no-cache)
+    pub fn with_cache_disabled(mut self) -> Self {
+        self.cache = None;
+        self
+    }
+
+    /// Force refresh: clear existing cache entries but keep cache enabled
+    pub fn with_cache_refresh(mut self) -> Self {
+        if let Some(ref mut cache) = self.cache {
+            cache.clear();
+        }
+        self
+    }
+
+    /// Get a reference to the cache (if enabled)
+    pub fn cache(&self) -> Option<&VersionCache> {
+        self.cache.as_ref()
+    }
+
     /// Detect all enabled tools and gather information
-    pub fn detect_all(&self) -> ToolboxInfo {
+    pub fn detect_all(&mut self) -> ToolboxInfo {
         let mut info = ToolboxInfo::new();
 
         // Current directory
@@ -52,7 +80,8 @@ impl ToolDetector {
         }
 
         // Tool versions
-        for tool_config in &self.config.enabled_tools() {
+        let enabled_tools = self.config.enabled_tools();
+        for tool_config in &enabled_tools {
             let tool_info = self.detect_tool(tool_config);
             info.tools.push(tool_info);
         }
@@ -76,8 +105,32 @@ impl ToolDetector {
         info
     }
 
-    /// Detect a single tool's version
-    pub fn detect_tool(&self, tool_config: &ToolConfig) -> ToolInfo {
+    /// Detect a single tool's version, using cache if available
+    pub fn detect_tool(&mut self, tool_config: &ToolConfig) -> ToolInfo {
+        // Try cache first
+        if let Some(ref mut cache) = self.cache {
+            if let Some(cached) = cache.get(&tool_config.name, &self.working_dir) {
+                return cached.clone();
+            }
+        }
+
+        // Cache miss or disabled — run detection
+        let tool_info = self.detect_tool_uncached(tool_config);
+
+        // Store in cache
+        if let Some(ref mut cache) = self.cache {
+            cache.put(
+                tool_config.name.clone(),
+                tool_info.clone(),
+                self.working_dir.clone(),
+            );
+        }
+
+        tool_info
+    }
+
+    /// Detect a single tool's version without cache
+    fn detect_tool_uncached(&self, tool_config: &ToolConfig) -> ToolInfo {
         match self.run_version_command(&tool_config.command) {
             Ok(output) => {
                 let version = if let Some(ref regex_str) = tool_config.parse_regex {
@@ -631,7 +684,7 @@ mod tests {
     // detect_tool tests
     #[test]
     fn test_detect_tool_unavailable() {
-        let detector = test_detector();
+        let mut detector = test_detector();
         let tool_config = ToolConfig {
             name: "NonExistent".to_string(),
             command: "nonexistent_command_12345 --version".to_string(),
@@ -649,7 +702,7 @@ mod tests {
 
     #[test]
     fn test_detect_tool_with_echo() {
-        let detector = test_detector();
+        let mut detector = test_detector();
         let tool_config = ToolConfig {
             name: "Echo".to_string(),
             command: "echo v1.2.3".to_string(),
@@ -667,7 +720,7 @@ mod tests {
 
     #[test]
     fn test_detect_tool_no_regex() {
-        let detector = test_detector();
+        let mut detector = test_detector();
         let tool_config = ToolConfig {
             name: "Raw".to_string(),
             command: "echo hello world".to_string(),
@@ -756,7 +809,7 @@ mod tests {
             ..Config::default()
         };
 
-        let detector = ToolDetector::new(config);
+        let mut detector = ToolDetector::new(config);
         let info = detector.detect_all();
 
         // Should return ToolboxInfo even with no tools
@@ -945,5 +998,98 @@ mod tests {
     fn test_which_command_empty() {
         let path = ToolDetector::which_command("");
         assert!(path.is_none());
+    }
+
+    // --- Cache integration tests ---
+
+    #[test]
+    fn test_detect_tool_uses_cache() {
+        let mut detector = test_detector();
+        let tool_config = ToolConfig {
+            name: "Echo".to_string(),
+            command: "echo v1.0.0".to_string(),
+            parse_regex: Some(r"v?(\d+\.\d+\.\d+)".to_string()),
+            icon: None,
+            enabled: true,
+            short_name: None,
+        };
+
+        // First call should be a miss
+        let info1 = detector.detect_tool(&tool_config);
+        assert!(info1.available);
+        assert_eq!(info1.version, Some("1.0.0".to_string()));
+
+        let cache = detector.cache().unwrap();
+        assert_eq!(cache.hits(), 0);
+        assert_eq!(cache.misses(), 1);
+
+        // Second call should be a hit
+        let info2 = detector.detect_tool(&tool_config);
+        assert!(info2.available);
+        assert_eq!(info2.version, Some("1.0.0".to_string()));
+
+        let cache = detector.cache().unwrap();
+        assert_eq!(cache.hits(), 1);
+        assert_eq!(cache.misses(), 1);
+    }
+
+    #[test]
+    fn test_detect_tool_cache_disabled() {
+        let mut detector = test_detector().with_cache_disabled();
+        let tool_config = ToolConfig {
+            name: "Echo".to_string(),
+            command: "echo v1.0.0".to_string(),
+            parse_regex: Some(r"v?(\d+\.\d+\.\d+)".to_string()),
+            icon: None,
+            enabled: true,
+            short_name: None,
+        };
+
+        let info = detector.detect_tool(&tool_config);
+        assert!(info.available);
+        assert!(detector.cache().is_none());
+    }
+
+    #[test]
+    fn test_detect_tool_cache_refresh() {
+        let mut detector = test_detector();
+        let tool_config = ToolConfig {
+            name: "Echo".to_string(),
+            command: "echo v1.0.0".to_string(),
+            parse_regex: Some(r"v?(\d+\.\d+\.\d+)".to_string()),
+            icon: None,
+            enabled: true,
+            short_name: None,
+        };
+
+        // Populate cache
+        detector.detect_tool(&tool_config);
+        assert_eq!(detector.cache().unwrap().len(), 1);
+
+        // Refresh clears cache
+        detector = detector.with_cache_refresh();
+        assert_eq!(detector.cache().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_cache_default_enabled() {
+        let detector = ToolDetector::with_defaults();
+        assert!(detector.cache().is_some());
+    }
+
+    #[test]
+    fn test_cache_config_disabled() {
+        let mut config = Config::default();
+        config.cache.enabled = false;
+        let detector = ToolDetector::new(config);
+        assert!(detector.cache().is_none());
+    }
+
+    #[test]
+    fn test_cache_config_custom_ttl() {
+        let mut config = Config::default();
+        config.cache.default_ttl = 60;
+        let detector = ToolDetector::new(config);
+        assert_eq!(detector.cache().unwrap().default_ttl(), 60);
     }
 }
