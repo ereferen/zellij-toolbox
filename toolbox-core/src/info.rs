@@ -439,6 +439,7 @@ impl ToolboxInfo {
         show_icons: bool,
         use_color: bool,
         single_line: bool,
+        theme: &crate::color::ResolvedTheme,
     ) -> String {
         use crate::color::{render_powerline, render_powerline_multiline, Segment};
 
@@ -456,7 +457,11 @@ impl ToolboxInfo {
             } else {
                 display_dir
             };
-            segments.push(Segment::blue(text));
+            segments.push(Segment::from_theme_colors(
+                text,
+                &theme.directory_fg,
+                &theme.directory_bg,
+            ));
         }
 
         // Git info
@@ -479,19 +484,24 @@ impl ToolboxInfo {
                 text = format!("{} {}", text, suffixes.join(" "));
             }
 
-            // Use green for clean, yellow for dirty
+            // Use clean/dirty colors from theme
             if git.is_dirty {
-                segments.push(Segment::yellow(text));
+                segments.push(Segment::from_theme_colors(
+                    text,
+                    &theme.git_dirty_fg,
+                    &theme.git_dirty_bg,
+                ));
             } else {
-                segments.push(Segment::green(text));
+                segments.push(Segment::from_theme_colors(
+                    text,
+                    &theme.git_clean_fg,
+                    &theme.git_clean_bg,
+                ));
             }
         }
 
         // Tools - group them or show individually
         let available_tools: Vec<_> = self.tools.iter().filter(|t| t.available).collect();
-
-        // Define colors to cycle through for tools
-        let tool_colors = [Segment::cyan, Segment::magenta, Segment::gray];
 
         for (i, tool) in available_tools.iter().enumerate() {
             let name = if compact {
@@ -508,8 +518,8 @@ impl ToolboxInfo {
                 format!("{} {}", name, version)
             };
 
-            let color_fn = tool_colors[i % tool_colors.len()];
-            segments.push(color_fn(text));
+            let (ref bg, ref fg) = theme.tool_colors[i % theme.tool_colors.len()];
+            segments.push(Segment::from_theme_colors(text, fg, bg));
         }
 
         // Virtual env
@@ -519,7 +529,11 @@ impl ToolboxInfo {
             } else {
                 format!("venv: {}", venv)
             };
-            segments.push(Segment::green(text));
+            segments.push(Segment::from_theme_colors(
+                text,
+                &theme.venv_fg,
+                &theme.venv_bg,
+            ));
         }
 
         if single_line {
@@ -982,7 +996,13 @@ mod tests {
     #[test]
     fn test_toolbox_info_format_powerline_empty() {
         let info = ToolboxInfo::new();
-        let output = info.format_powerline(false, true, false, true);
+        let output = info.format_powerline(
+            false,
+            true,
+            false,
+            true,
+            &crate::color::ResolvedTheme::default_theme(),
+        );
         assert!(output.is_empty());
     }
 
@@ -994,7 +1014,13 @@ mod tests {
                 .with_icon(Some("\u{1f980}".to_string())),
         );
 
-        let output = info.format_powerline(false, true, false, true);
+        let output = info.format_powerline(
+            false,
+            true,
+            false,
+            true,
+            &crate::color::ResolvedTheme::default_theme(),
+        );
         assert!(output.contains("Rust"));
         assert!(output.contains("1.75.0"));
     }
@@ -1007,7 +1033,13 @@ mod tests {
             "1.75.0".to_string(),
         ));
 
-        let output = info.format_powerline(false, false, true, true);
+        let output = info.format_powerline(
+            false,
+            false,
+            true,
+            true,
+            &crate::color::ResolvedTheme::default_theme(),
+        );
         assert!(output.contains("\x1b[")); // ANSI codes
         assert!(output.contains("Rust"));
     }
@@ -1020,7 +1052,13 @@ mod tests {
         info.tools
             .push(ToolInfo::available("B".to_string(), "2.0".to_string()));
 
-        let output = info.format_powerline(false, false, true, false);
+        let output = info.format_powerline(
+            false,
+            false,
+            true,
+            false,
+            &crate::color::ResolvedTheme::default_theme(),
+        );
         assert!(output.contains('\n'));
     }
 
@@ -1038,7 +1076,13 @@ mod tests {
         });
 
         // Green segment for clean repo (no color for easy assertion)
-        let output = info.format_powerline(false, false, false, true);
+        let output = info.format_powerline(
+            false,
+            false,
+            false,
+            true,
+            &crate::color::ResolvedTheme::default_theme(),
+        );
         assert!(output.contains("main"));
     }
 
@@ -1055,7 +1099,13 @@ mod tests {
             behind: None,
         });
 
-        let output = info.format_powerline(false, false, false, true);
+        let output = info.format_powerline(
+            false,
+            false,
+            false,
+            true,
+            &crate::color::ResolvedTheme::default_theme(),
+        );
         assert!(output.contains("dev"));
         assert!(output.contains("+3"));
     }
@@ -1068,7 +1118,13 @@ mod tests {
                 .with_short_name(Some("py".to_string())),
         );
 
-        let output = info.format_powerline(true, false, false, true);
+        let output = info.format_powerline(
+            true,
+            false,
+            false,
+            true,
+            &crate::color::ResolvedTheme::default_theme(),
+        );
         assert!(output.contains("py"));
         assert!(!output.contains("Python"));
     }
@@ -1078,7 +1134,13 @@ mod tests {
         let mut info = ToolboxInfo::new();
         info.virtual_env = Some("myenv".to_string());
 
-        let output = info.format_powerline(false, false, false, true);
+        let output = info.format_powerline(
+            false,
+            false,
+            false,
+            true,
+            &crate::color::ResolvedTheme::default_theme(),
+        );
         assert!(output.contains("venv: myenv"));
     }
 

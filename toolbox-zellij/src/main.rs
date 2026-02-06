@@ -33,6 +33,8 @@ struct ToolboxPlugin {
     single_line: bool,
     /// Powerline style output
     powerline: bool,
+    /// Theme preset name (default, dark, light, solarized)
+    theme: Option<String>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -76,6 +78,9 @@ impl ZellijPlugin for ToolboxPlugin {
             .get("powerline")
             .map(|s| s == "true" || s == "1")
             .unwrap_or(false);
+
+        // Read theme preset from configuration
+        self.theme = configuration.get("theme").cloned();
 
         // Initial content (use marker for dynamic separator)
         self.content = vec![
@@ -164,6 +169,14 @@ impl ToolboxPlugin {
             if self.single_line {
                 args.push("--single-line");
             }
+        }
+
+        // Add theme if configured
+        let theme_arg;
+        if let Some(ref theme) = self.theme {
+            args.push("--theme");
+            theme_arg = theme.clone();
+            args.push(&theme_arg);
         }
 
         // Add working directory if configured
