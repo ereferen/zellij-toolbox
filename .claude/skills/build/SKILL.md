@@ -1,3 +1,10 @@
+---
+name: build
+description: Build the toolbox project (CLI or WASM plugin)
+argument-hint: "[all|release|cli|wasm]"
+allowed-tools: "Bash(cargo:*)"
+---
+
 # /build - Build the project
 
 Build the toolbox project.

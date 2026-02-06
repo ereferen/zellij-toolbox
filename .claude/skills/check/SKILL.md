@@ -1,3 +1,10 @@
+---
+name: check
+description: Run code quality checks (fmt, clippy, cargo check)
+argument-hint: "[fix]"
+allowed-tools: "Bash(cargo:*)"
+---
+
 # /check - Check code quality
 
 Run code quality checks (clippy, fmt, check).
@@ -14,7 +21,7 @@ When the user runs this skill:
 1. Run checks in order:
    ```bash
    cargo fmt --check
-   cargo clippy -- -D warnings
+   cargo clippy --workspace --all-targets -- -D warnings
    cargo check
    ```
 

@@ -1,3 +1,10 @@
+---
+name: run
+description: Run the toolbox CLI with various options
+argument-hint: "[json|--dir /path|...]"
+allowed-tools: "Bash(cargo:*), Bash(./target:*)"
+---
+
 # /run - Run the toolbox CLI
 
 Run the toolbox CLI with various options.

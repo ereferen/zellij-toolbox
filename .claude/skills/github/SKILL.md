@@ -1,3 +1,9 @@
+---
+name: github
+description: GitHub operations (issues, PRs, repos) with fallback strategy (gh → MCP → curl)
+user-invocable: false
+---
+
 # GitHub Operations - Fallback Strategy
 
 ## Usage

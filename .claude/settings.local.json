@@ -22,7 +22,16 @@
       "Bash(wasm-objdump:*)",
       "Bash(wasm2wat:*)",
       "Bash(wasm-tools print:*)",
-      "WebSearch"
+      "WebSearch",
+      "WebFetch(domain:mise.jdx.dev)",
+      "Bash(RUSTFLAGS=\"-D warnings\" cargo build:*)"
     ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true
+  },
+  "remote": {
+    "defaultEnvironmentId": "env_01CeHpiV7zDmPoS2FdJ9dZER"
   }
 }

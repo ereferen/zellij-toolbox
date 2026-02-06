@@ -1,3 +1,9 @@
+---
+name: add-tool
+description: Add a new tool definition to toolbox-core's default tools
+argument-hint: "<name> <command>"
+---
+
 # /add-tool - Add a new tool to the default configuration
 
 Add a new tool definition to toolbox-core's default tools.

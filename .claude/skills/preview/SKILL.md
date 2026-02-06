@@ -1,3 +1,10 @@
+---
+name: preview
+description: Preview toolbox CLI output in various formats
+argument-hint: "[text|powerline|json]"
+allowed-tools: "Bash(cargo:*), Bash(./target:*)"
+---
+
 # /preview - Preview toolbox CLI output
 
 Preview the toolbox CLI output in various formats.
