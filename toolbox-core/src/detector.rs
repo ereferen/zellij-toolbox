@@ -383,6 +383,7 @@ impl ToolDetector {
     }
 
     #[cfg(not(feature = "sysinfo"))]
+    #[allow(dead_code)]
     fn get_system_info(&self) -> Option<SystemInfo> {
         None
     }
