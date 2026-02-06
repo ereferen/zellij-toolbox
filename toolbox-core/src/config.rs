@@ -2,7 +2,135 @@
 
 use crate::error::{Result, ToolboxError};
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::path::PathBuf;
+use std::str::FromStr;
+
+/// A color value: either a named ANSI color or an RGB hex value (#RRGGBB)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ThemeColor {
+    Blue,
+    Green,
+    Yellow,
+    Cyan,
+    Magenta,
+    Gray,
+    DarkGray,
+    Red,
+    White,
+    Black,
+    Rgb(u8, u8, u8),
+}
+
+impl ThemeColor {
+    /// Parse a color string: named colors or "#RRGGBB"
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "blue" => Some(Self::Blue),
+            "green" => Some(Self::Green),
+            "yellow" => Some(Self::Yellow),
+            "cyan" => Some(Self::Cyan),
+            "magenta" => Some(Self::Magenta),
+            "gray" | "grey" => Some(Self::Gray),
+            "darkgray" | "dark_gray" | "darkgrey" | "dark_grey" => Some(Self::DarkGray),
+            "red" => Some(Self::Red),
+            "white" => Some(Self::White),
+            "black" => Some(Self::Black),
+            s if s.starts_with('#') && s.len() == 7 => {
+                let r = u8::from_str_radix(&s[1..3], 16).ok()?;
+                let g = u8::from_str_radix(&s[3..5], 16).ok()?;
+                let b = u8::from_str_radix(&s[5..7], 16).ok()?;
+                Some(Self::Rgb(r, g, b))
+            }
+            _ => None,
+        }
+    }
+
+    /// Convert to a string representation for serialization
+    pub fn to_color_string(&self) -> String {
+        match self {
+            Self::Blue => "blue".to_string(),
+            Self::Green => "green".to_string(),
+            Self::Yellow => "yellow".to_string(),
+            Self::Cyan => "cyan".to_string(),
+            Self::Magenta => "magenta".to_string(),
+            Self::Gray => "gray".to_string(),
+            Self::DarkGray => "darkgray".to_string(),
+            Self::Red => "red".to_string(),
+            Self::White => "white".to_string(),
+            Self::Black => "black".to_string(),
+            Self::Rgb(r, g, b) => format!("#{:02X}{:02X}{:02X}", r, g, b),
+        }
+    }
+}
+
+impl FromStr for ThemeColor {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        Self::parse(s).ok_or_else(|| format!("Invalid color: {}", s))
+    }
+}
+
+impl fmt::Display for ThemeColor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_color_string())
+    }
+}
+
+impl Serialize for ThemeColor {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_color_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for ThemeColor {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Self::parse(&s).ok_or_else(|| serde::de::Error::custom(format!("Invalid color: {}", s)))
+    }
+}
+
+/// Theme configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ThemeConfig {
+    /// Preset theme name: "default", "dark", "light", "solarized"
+    pub preset: String,
+    /// Custom color overrides (applied on top of preset)
+    pub custom: Option<CustomThemeConfig>,
+}
+
+impl Default for ThemeConfig {
+    fn default() -> Self {
+        Self {
+            preset: "default".to_string(),
+            custom: None,
+        }
+    }
+}
+
+/// Custom theme color overrides
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct CustomThemeConfig {
+    pub directory_bg: Option<ThemeColor>,
+    pub directory_fg: Option<ThemeColor>,
+    pub git_clean_bg: Option<ThemeColor>,
+    pub git_clean_fg: Option<ThemeColor>,
+    pub git_dirty_bg: Option<ThemeColor>,
+    pub git_dirty_fg: Option<ThemeColor>,
+    pub tool_bg: Option<Vec<ThemeColor>>,
+    pub tool_fg: Option<Vec<ThemeColor>>,
+    pub venv_bg: Option<ThemeColor>,
+    pub venv_fg: Option<ThemeColor>,
+}
 
 /// Main configuration structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -27,6 +155,9 @@ pub struct Config {
     /// If false, only custom_tools will be used
     #[serde(default = "default_true")]
     pub use_default_tools: bool,
+    /// Theme configuration for powerline output
+    #[serde(default)]
+    pub theme: ThemeConfig,
 }
 
 /// Override settings for a specific tool
@@ -55,6 +186,7 @@ impl Default for Config {
             extras: ExtrasConfig::default(),
             cache: CacheConfig::default(),
             use_default_tools: true,
+            theme: ThemeConfig::default(),
         }
     }
 }
@@ -669,5 +801,164 @@ enabled = false
         // Docker should be disabled
         let docker = tools.iter().find(|t| t.name == "Docker").unwrap();
         assert!(!docker.enabled);
+    }
+
+    // --- ThemeColor tests ---
+
+    #[test]
+    fn test_theme_color_parse_named() {
+        assert_eq!(ThemeColor::parse("blue"), Some(ThemeColor::Blue));
+        assert_eq!(ThemeColor::parse("green"), Some(ThemeColor::Green));
+        assert_eq!(ThemeColor::parse("yellow"), Some(ThemeColor::Yellow));
+        assert_eq!(ThemeColor::parse("cyan"), Some(ThemeColor::Cyan));
+        assert_eq!(ThemeColor::parse("magenta"), Some(ThemeColor::Magenta));
+        assert_eq!(ThemeColor::parse("gray"), Some(ThemeColor::Gray));
+        assert_eq!(ThemeColor::parse("grey"), Some(ThemeColor::Gray));
+        assert_eq!(ThemeColor::parse("darkgray"), Some(ThemeColor::DarkGray));
+        assert_eq!(ThemeColor::parse("dark_gray"), Some(ThemeColor::DarkGray));
+        assert_eq!(ThemeColor::parse("red"), Some(ThemeColor::Red));
+        assert_eq!(ThemeColor::parse("white"), Some(ThemeColor::White));
+        assert_eq!(ThemeColor::parse("black"), Some(ThemeColor::Black));
+    }
+
+    #[test]
+    fn test_theme_color_parse_case_insensitive() {
+        assert_eq!(ThemeColor::parse("Blue"), Some(ThemeColor::Blue));
+        assert_eq!(ThemeColor::parse("GREEN"), Some(ThemeColor::Green));
+        assert_eq!(ThemeColor::parse("DarkGray"), Some(ThemeColor::DarkGray));
+    }
+
+    #[test]
+    fn test_theme_color_parse_rgb() {
+        assert_eq!(
+            ThemeColor::parse("#3465A4"),
+            Some(ThemeColor::Rgb(0x34, 0x65, 0xA4))
+        );
+        assert_eq!(ThemeColor::parse("#000000"), Some(ThemeColor::Rgb(0, 0, 0)));
+        assert_eq!(
+            ThemeColor::parse("#FFFFFF"),
+            Some(ThemeColor::Rgb(255, 255, 255))
+        );
+    }
+
+    #[test]
+    fn test_theme_color_parse_invalid() {
+        assert_eq!(ThemeColor::parse("invalid"), None);
+        assert_eq!(ThemeColor::parse("#12345"), None); // too short
+        assert_eq!(ThemeColor::parse("#1234567"), None); // too long
+        assert_eq!(ThemeColor::parse("#GGGGGG"), None); // invalid hex
+    }
+
+    #[test]
+    fn test_theme_color_serde_roundtrip_named() {
+        let color = ThemeColor::Blue;
+        let json = serde_json::to_string(&color).unwrap();
+        assert_eq!(json, "\"blue\"");
+        let parsed: ThemeColor = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, color);
+    }
+
+    #[test]
+    fn test_theme_color_serde_roundtrip_rgb() {
+        let color = ThemeColor::Rgb(0x34, 0x65, 0xA4);
+        let json = serde_json::to_string(&color).unwrap();
+        assert_eq!(json, "\"#3465A4\"");
+        let parsed: ThemeColor = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, color);
+    }
+
+    #[test]
+    fn test_theme_color_from_str() {
+        let color: ThemeColor = "blue".parse().unwrap();
+        assert_eq!(color, ThemeColor::Blue);
+        let color: ThemeColor = "#FF0000".parse().unwrap();
+        assert_eq!(color, ThemeColor::Rgb(255, 0, 0));
+        assert!("invalid".parse::<ThemeColor>().is_err());
+    }
+
+    #[test]
+    fn test_theme_color_display() {
+        assert_eq!(ThemeColor::Blue.to_string(), "blue");
+        assert_eq!(ThemeColor::Rgb(0x34, 0x65, 0xA4).to_string(), "#3465A4");
+    }
+
+    // --- ThemeConfig tests ---
+
+    #[test]
+    fn test_theme_config_default() {
+        let theme = ThemeConfig::default();
+        assert_eq!(theme.preset, "default");
+        assert!(theme.custom.is_none());
+    }
+
+    #[test]
+    fn test_config_backward_compatible_no_theme() {
+        // Config without [theme] section should work
+        let toml_content = r#"
+[display]
+show_icons = true
+compact = true
+"#;
+        let config: Config = toml::from_str(toml_content).unwrap();
+        assert_eq!(config.theme.preset, "default");
+        assert!(config.theme.custom.is_none());
+    }
+
+    #[test]
+    fn test_config_with_theme_preset() {
+        let toml_content = r#"
+[theme]
+preset = "dark"
+"#;
+        let config: Config = toml::from_str(toml_content).unwrap();
+        assert_eq!(config.theme.preset, "dark");
+    }
+
+    #[test]
+    fn test_config_with_theme_custom_colors() {
+        let toml_content = r##"
+[theme]
+preset = "dark"
+
+[theme.custom]
+directory_bg = "#3465A4"
+directory_fg = "white"
+git_clean_bg = "#4E9A06"
+git_dirty_bg = "#C4A000"
+tool_bg = ["#06989A", "#75507B", "#555753"]
+tool_fg = ["white", "white", "white"]
+venv_bg = "green"
+venv_fg = "black"
+"##;
+        let config: Config = toml::from_str(toml_content).unwrap();
+        assert_eq!(config.theme.preset, "dark");
+        let custom = config.theme.custom.unwrap();
+        assert_eq!(custom.directory_bg, Some(ThemeColor::Rgb(0x34, 0x65, 0xA4)));
+        assert_eq!(custom.directory_fg, Some(ThemeColor::White));
+        assert_eq!(custom.git_clean_bg, Some(ThemeColor::Rgb(0x4E, 0x9A, 0x06)));
+        assert_eq!(custom.git_dirty_bg, Some(ThemeColor::Rgb(0xC4, 0xA0, 0x00)));
+        let tool_bg = custom.tool_bg.unwrap();
+        assert_eq!(tool_bg.len(), 3);
+        assert_eq!(tool_bg[0], ThemeColor::Rgb(0x06, 0x98, 0x9A));
+        assert_eq!(custom.venv_bg, Some(ThemeColor::Green));
+        assert_eq!(custom.venv_fg, Some(ThemeColor::Black));
+    }
+
+    #[test]
+    fn test_theme_config_toml_roundtrip() {
+        let mut config = Config::default();
+        config.theme.preset = "solarized".to_string();
+        config.theme.custom = Some(CustomThemeConfig {
+            directory_bg: Some(ThemeColor::Rgb(0x34, 0x65, 0xA4)),
+            directory_fg: Some(ThemeColor::White),
+            ..Default::default()
+        });
+
+        let toml_str = toml::to_string_pretty(&config).unwrap();
+        let parsed: Config = toml::from_str(&toml_str).unwrap();
+        assert_eq!(parsed.theme.preset, "solarized");
+        let custom = parsed.theme.custom.unwrap();
+        assert_eq!(custom.directory_bg, Some(ThemeColor::Rgb(0x34, 0x65, 0xA4)));
+        assert_eq!(custom.directory_fg, Some(ThemeColor::White));
     }
 }

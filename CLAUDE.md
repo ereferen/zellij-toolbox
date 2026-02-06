@@ -128,6 +128,7 @@ CLIインターフェース。clap使用。
 - `--powerline`: Powerlineスタイル出力
 - `--single-line`: シングルライン表示（powerline使用時）
 - `--color`: カラーモード（auto/always/never）
+- `--theme`: テーマプリセット（default/dark/light/solarized）- 設定ファイルを上書き
 
 ### toolbox-zellij
 
@@ -152,6 +153,7 @@ ZellijのWASMプラグイン。CLIを呼び出して結果を表示する。
 - [x] 仮想環境検出（Python venv, Conda）
 - [x] DevContainer設定
 - [x] `toolbox doctor` 診断サブコマンド（ツール検出環境の診断、JSON出力対応）
+- [x] カラーテーマシステム（4プリセット: default/dark/light/solarized、カスタムRGBカラー、TOML設定対応）
 
 ## テストルール（必須）
 
@@ -215,7 +217,7 @@ cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings && ca
 - [x] CLI統合テスト（assert_cmd + predicates）
 - [ ] スナップショットテスト（insta クレート）
 - [ ] Zellijプラグインの統合テスト
-- [ ] カラーテーマのカスタマイズ対応
+- [x] カラーテーマのカスタマイズ対応（プリセット4種 + カスタムRGBカラー）
 - [ ] ドキュメントの多言語化（日本語・英語）
 
 ## 注意事項

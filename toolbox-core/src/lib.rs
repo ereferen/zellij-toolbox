@@ -15,6 +15,7 @@ pub mod error;
 pub mod info;
 
 pub use cache::VersionCache;
+pub use color::ResolvedTheme;
 pub use config::Config;
 pub use detector::ToolDetector;
 pub use error::ToolboxError;

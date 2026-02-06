@@ -287,6 +287,95 @@ fn test_color_never() {
     toolbox_cmd().args(["--color", "never"]).assert().success();
 }
 
+// --- Theme flag ---
+
+#[test]
+fn test_theme_default_succeeds() {
+    toolbox_cmd()
+        .args(["--powerline", "--theme", "default", "--color", "always"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_theme_dark_succeeds() {
+    toolbox_cmd()
+        .args(["--powerline", "--theme", "dark", "--color", "always"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_theme_light_succeeds() {
+    toolbox_cmd()
+        .args(["--powerline", "--theme", "light", "--color", "always"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_theme_solarized_succeeds() {
+    toolbox_cmd()
+        .args(["--powerline", "--theme", "solarized", "--color", "always"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_theme_with_config_preset() {
+    let mut temp_file = NamedTempFile::new().unwrap();
+    writeln!(
+        temp_file,
+        r#"
+[theme]
+preset = "dark"
+"#
+    )
+    .unwrap();
+
+    let path = temp_file.path().to_path_buf();
+
+    toolbox_cmd()
+        .args([
+            "--config",
+            path.to_str().unwrap(),
+            "--powerline",
+            "--color",
+            "always",
+        ])
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_theme_cli_overrides_config() {
+    let mut temp_file = NamedTempFile::new().unwrap();
+    writeln!(
+        temp_file,
+        r#"
+[theme]
+preset = "dark"
+"#
+    )
+    .unwrap();
+
+    let path = temp_file.path().to_path_buf();
+
+    // --theme light should override config's "dark"
+    toolbox_cmd()
+        .args([
+            "--config",
+            path.to_str().unwrap(),
+            "--powerline",
+            "--theme",
+            "light",
+            "--color",
+            "always",
+        ])
+        .assert()
+        .success();
+}
+
 // --- Doctor subcommand ---
 
 #[test]

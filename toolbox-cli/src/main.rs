@@ -3,7 +3,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
-use toolbox_core::{Config, ToolDetector};
+use toolbox_core::{Config, ResolvedTheme, ToolDetector};
 
 #[derive(Parser)]
 #[command(name = "toolbox")]
@@ -49,6 +49,10 @@ struct Cli {
     /// Force refresh all cached versions
     #[arg(long)]
     refresh: bool,
+
+    /// Theme preset (default, dark, light, solarized) - overrides config
+    #[arg(long)]
+    theme: Option<String>,
 
     #[command(subcommand)]
     command: Option<Commands>,
@@ -96,6 +100,13 @@ fn main() -> Result<()> {
         Config::load()?
     };
 
+    // Resolve theme before moving config into detector
+    let mut theme_config = config.theme.clone();
+    if let Some(ref preset) = cli.theme {
+        theme_config.preset = preset.clone();
+    }
+    let theme = ResolvedTheme::from_config(&theme_config);
+
     // Create detector
     let mut detector = ToolDetector::new(config);
     if let Some(ref dir) = cli.dir {
@@ -127,7 +138,7 @@ fn main() -> Result<()> {
             if cli.powerline {
                 println!(
                     "{}",
-                    info.format_powerline(compact, show_icons, use_color, cli.single_line)
+                    info.format_powerline(compact, show_icons, use_color, cli.single_line, &theme)
                 );
             } else {
                 println!("{}", info.format_display(compact, show_icons));
